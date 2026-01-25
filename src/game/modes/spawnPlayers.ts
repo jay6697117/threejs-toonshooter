@@ -7,6 +7,7 @@ import { createNpcEntity } from '../entities/npc';
 import { createPlayerEntity } from '../entities/player';
 import type { Entity, TeamId } from '../entities/entityBase';
 import { syncVisual } from '../entities/entityBase';
+import { createCharacterMesh } from '../core/characterFactory';
 
 const COLORS: Record<string, number> = {
   p1: 0x45d16e,
@@ -78,7 +79,7 @@ function createHuman(id: string, team: TeamId, world: World, assets: Assets, cha
     team,
     color: charColor ?? COLORS[team] ?? COLORS[id] ?? 0xffffff,
     startPos,
-    mesh: assets.createPlaceholderMesh({ color: charColor ?? COLORS[team] ?? COLORS[id] ?? 0xffffff })
+    mesh: createCharacterMesh({ color: charColor ?? COLORS[team] ?? COLORS[id] ?? 0xffffff })
   });
 }
 
@@ -89,7 +90,7 @@ function createBot(id: string, team: TeamId, world: World, assets: Assets): Enti
     team,
     color: COLORS[team] ?? COLORS[id] ?? 0xffffff,
     startPos,
-    mesh: assets.createPlaceholderMesh({ color: COLORS[team] ?? COLORS[id] ?? 0xffffff })
+    mesh: createCharacterMesh({ color: COLORS[team] ?? COLORS[id] ?? 0xffffff })
   });
 }
 
