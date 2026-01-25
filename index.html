@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sanguo Shooter</title>
+  <meta name="description" content="A Three.js toon shooter project: Sanguo remake + legacy prototype." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Sanguo Shooter" />
+  <meta property="og:description" content="A Three.js toon shooter project: Sanguo remake + legacy prototype." />
+  <meta property="og:image" content="/toonshooter/design-markedup.jpeg" />
+  <meta property="og:image:width" content="1376" />
+  <meta property="og:image:height" content="768" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Sanguo Shooter" />
+  <meta name="twitter:description" content="A Three.js toon shooter project: Sanguo remake + legacy prototype." />
+  <meta name="twitter:image" content="/toonshooter/design-markedup.jpeg" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: radial-gradient(circle at top, #0d1224, #04040b 65%);
+      --card: rgba(6, 13, 33, 0.72);
+      --accent: #8cff75;
+      --accent-2: #79d5ff;
+      --text: #f8fbff;
+      --muted: rgba(248, 251, 255, 0.72);
+      --border: rgba(255, 255, 255, 0.08);
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: clamp(20px, 4vw, 64px) clamp(20px, 6vw, 96px);
+      display: flex;
+      flex-direction: column;
+      gap: clamp(24px, 3vw, 42px);
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    header h1 {
+      font-size: clamp(28px, 4vw, 40px);
+      margin: 0;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    header span {
+      font-size: 14px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .social-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+      text-decoration: underline;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .social-link svg {
+      width: 22px;
+      height: 22px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+    main {
+      display: flex;
+      flex-direction: column;
+      gap: clamp(28px, 5vw, 64px);
+    }
+    .entry {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(24px, 4vw, 48px);
+      align-items: center;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: clamp(20px, 4vw, 36px);
+      box-shadow: 0 40px 80px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(24px);
+    }
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.28em;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    h2 {
+      font-size: clamp(30px, 4vw, 48px);
+      margin: 12px 0 16px;
+      line-height: 1.15;
+    }
+    p {
+      margin: 0 0 18px;
+      font-size: 16px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .cta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .cta a {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(6, 13, 33, 0.92);
+      color: var(--text);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: transform 160ms ease, border-color 160ms ease;
+    }
+    .cta a:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .cta a.primary {
+      background: linear-gradient(135deg, rgba(140, 255, 117, 0.28), rgba(121, 213, 255, 0.12));
+      border-color: rgba(140, 255, 117, 0.4);
+    }
+    figure {
+      margin: 0;
+      border-radius: 28px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: 0 40px 80px rgba(0, 0, 0, 0.35);
+    }
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 14px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    footer a {
+      color: var(--text);
+    }
+    @media (max-width: 860px) {
+      .entry {
+        grid-template-columns: 1fr;
+      }
+      .cta a {
+        flex: 1;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Sanguo Shooter</h1>
+    <span>Three.js · Vite · TypeScript</span>
+  </header>
+
+  <main>
+    <div class="entry">
+      <section class="card">
+        <p class="eyebrow">Toon Shooter Project</p>
+        <h2>Build the full Sanguo remake.</h2>
+        <p>
+          This repo contains a legacy Three.js prototype and an in-progress, fully modular Sanguo-themed remake.
+          The remake is built with Vite + TypeScript for long-term maintainability.
+        </p>
+        <div class="cta">
+          <a class="primary" href="/sanguo-shooter/">Play Sanguo Shooter</a>
+          <a href="/toonshooter/">Play Legacy Prototype</a>
+        </div>
+      </section>
+
+      <figure>
+        <img src="/toonshooter/design-markedup.jpeg" alt="Toon shooter design" loading="lazy" />
+      </figure>
+    </div>
+  </main>
+
+  <footer>
+    <span id="footerYear">© 2026 · Built with Three.js</span>
+    <span>
+      <a class="social-link" href="https://x.com/chongdashu" target="_blank" rel="noreferrer">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 3h5.3l4 5.5L16.9 3H21l-6.5 8.3L21 21h-5.3l-4.3-5.9L7 21H3l6.6-8.7z" />
+        </svg>
+        chongdashu
+      </a>
+    </span>
+  </footer>
+
+  <script type="module" src="/src/landing/main.ts"></script>
+</body>
+</html>
+

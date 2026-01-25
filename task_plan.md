@@ -19,11 +19,11 @@
 把工程跑通并固化架构边界，确保后续扩展不会反复推翻基础设施。
 
 ### Phase 0 - Checklist
-- [ ] 新增 Vite/TS 工程文件：`package.json`、`vite.config.ts`、`tsconfig.json` 等
-- [ ] 迁移/改造入口：根 `index.html` 作为 landing；新增 `sanguo-shooter/index.html` 作为新游戏入口（multi-page build）
-- [ ] 保留 legacy：`public/toonshooter/` 继续作为静态可访问的旧原型（不参与 Vite 构建）
-- [ ] 建立 `src/game/**` 模块骨架：core/entities/weapons/throwables/arena/combat/fx/ui/modes
-- [ ] 固化“数据驱动”基础：ID 类型 + 配置 Schema + 运行时校验入口
+- [x] 新增 Vite/TS 工程文件：`package.json`、`vite.config.ts`、`tsconfig.json` 等
+- [x] 迁移/改造入口：根 `index.html` 作为 landing；新增 `sanguo-shooter/index.html` 作为新游戏入口（multi-page build）
+- [x] 保留 legacy：`public/toonshooter/` 继续作为静态可访问的旧原型（不参与 Vite 构建）
+- [x] 建立 `src/game/**` 模块骨架：core/entities/weapons/throwables/arena/combat/fx/ui/modes
+- [x] 固化“数据驱动”基础：ID 类型 + 配置 Schema + 运行时校验入口
 - [ ] 最小可运行：新入口能在浏览器打开、渲染 Three.js 场景、响应 resize、主循环稳定运行
 
 ## 后续阶段（Phase 1+，仅做路线图）
@@ -79,4 +79,3 @@ npm run dev
 npm run build
 npm run preview
 ```
-
