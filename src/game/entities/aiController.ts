@@ -23,6 +23,17 @@ export type AiControllerState = {
   path: THREE.Vector3[];
   pathIndex: number;
   throwableCooldown: number;
+  cachedFrame: AiFrame | null;
+  nextThinkStep: number;
+};
+
+export type AiFrame = {
+  moveDir: THREE.Vector3;
+  dashRequested: boolean;
+  aimPoint: THREE.Vector3 | null;
+  weaponInput: WeaponFrameInput;
+  throwRequested: boolean;
+  throwAimPoint: THREE.Vector3 | null;
 };
 
 export function ensureAiControllerState(map: Map<string, AiControllerState>, entityId: string, rng: Rng): AiControllerState {
@@ -36,10 +47,53 @@ export function ensureAiControllerState(map: Map<string, AiControllerState>, ent
     nextPathRecalcTime: 0,
     path: [],
     pathIndex: 0,
-    throwableCooldown: 0
+    throwableCooldown: 0,
+    cachedFrame: null,
+    nextThinkStep: 0
   };
   map.set(entityId, created);
   return created;
+}
+
+export function computeAiFrameThrottled(
+  entity: Entity,
+  ai: AiControllerState,
+  world: World,
+  match: MatchRuntime,
+  difficulty: DifficultyConfig,
+  dt: number,
+  nav: NavGrid | null,
+  rng: Rng,
+  options: { stepIndex: number; thinkIntervalSteps: number }
+): AiFrame {
+  const thinkIntervalSteps = Math.max(1, Math.floor(options.thinkIntervalSteps));
+
+  if (!ai.cachedFrame || thinkIntervalSteps <= 1 || options.stepIndex >= ai.nextThinkStep) {
+    const frame = computeAiFrame(entity, ai, world, match, difficulty, dt, nav, rng);
+    ai.cachedFrame = {
+      moveDir: frame.moveDir.clone(),
+      dashRequested: frame.dashRequested,
+      aimPoint: frame.aimPoint ? frame.aimPoint.clone() : null,
+      weaponInput: frame.weaponInput,
+      throwRequested: frame.throwRequested,
+      throwAimPoint: frame.throwAimPoint ? frame.throwAimPoint.clone() : null
+    };
+    ai.nextThinkStep = options.stepIndex + thinkIntervalSteps;
+    return frame;
+  }
+
+  ai.throwableCooldown = Math.max(0, ai.throwableCooldown - dt);
+  ai.nextPathRecalcTime = Math.max(0, ai.nextPathRecalcTime - dt);
+
+  const cached = ai.cachedFrame;
+  return {
+    moveDir: cached.moveDir.clone(),
+    dashRequested: cached.dashRequested,
+    aimPoint: cached.aimPoint ? cached.aimPoint.clone() : null,
+    weaponInput: cached.weaponInput,
+    throwRequested: cached.throwRequested && ai.throwableCooldown <= 0,
+    throwAimPoint: cached.throwAimPoint ? cached.throwAimPoint.clone() : null
+  };
 }
 
 export function computeAiFrame(
@@ -51,14 +105,7 @@ export function computeAiFrame(
   dt: number,
   nav: NavGrid | null,
   rng: Rng
-): {
-  moveDir: THREE.Vector3;
-  dashRequested: boolean;
-  aimPoint: THREE.Vector3 | null;
-  weaponInput: WeaponFrameInput;
-  throwRequested: boolean;
-  throwAimPoint: THREE.Vector3 | null;
-} {
+): AiFrame {
   const aimTarget = pickAimTarget(entity, ai, world);
   const goal = pickGoal(entity, world, match, aimTarget);
 

@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { GAME_CONFIG } from '../config/game';
-import type { InputManager } from '../core/input';
+import type { InputAction } from '../core/input';
 import type { Entity, TeamId } from './entityBase';
 import { updateCharacterMovement } from './movement';
+
+type DirectionInput = { isDown: (action: InputAction) => boolean };
 
 export type CreatePlayerOptions = {
   id: string;
@@ -58,7 +60,7 @@ export function createPlayerEntity(options: CreatePlayerOptions): Entity {
 
 export function updatePlayer(
   entity: Entity,
-  input: InputManager,
+  input: DirectionInput,
   aimPoint: THREE.Vector3 | null,
   dt: number,
   dashRequested: boolean
@@ -67,7 +69,7 @@ export function updatePlayer(
   updateCharacterMovement(entity, moveDir, aimPoint, dt, dashRequested);
 }
 
-function getMoveDirection(input: InputManager): THREE.Vector3 {
+function getMoveDirection(input: DirectionInput): THREE.Vector3 {
   const dir = new THREE.Vector3();
   if (input.isDown('moveForward')) dir.z -= 1;
   if (input.isDown('moveBackward')) dir.z += 1;

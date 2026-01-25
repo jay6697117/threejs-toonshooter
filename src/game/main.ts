@@ -13,7 +13,7 @@ const ui = createSanguoShooterUi(canvas.parentElement ?? document.body, app);
 
 const clock = new THREE.Clock();
 const stop = startFixedLoop(
-  { clock, fixedDt: 1 / 120 },
+  { clock, fixedDt: 1 / 120, getTimeScale: () => app.getTimeScale() },
   {
     onBeginFrame: (frameDt) => app.beginFrame(frameDt),
     onStep: (fixedDt) => app.step(fixedDt),

@@ -6,6 +6,7 @@ import { CHARACTER_CONFIGS } from '../config/characters';
 import { createNpcEntity } from '../entities/npc';
 import { createPlayerEntity } from '../entities/player';
 import type { Entity, TeamId } from '../entities/entityBase';
+import { syncVisual } from '../entities/entityBase';
 
 const COLORS: Record<string, number> = {
   p1: 0x45d16e,
@@ -14,6 +15,13 @@ const COLORS: Record<string, number> = {
   p4: 0xffc44d,
   red: 0xff6b6b,
   blue: 0x79d5ff
+};
+
+const DEFAULT_CHARACTER_BY_ID: Record<string, CharacterId> = {
+  p1: 'liuBei',
+  p2: 'guanYu',
+  p3: 'caoCao',
+  p4: 'sunShangxiang'
 };
 
 export function spawnPlayersForMode(
@@ -55,6 +63,10 @@ export function spawnPlayersForMode(
   }
 
   const human = entities.find((e) => e.id === humanId) ?? entities[0];
+  for (const e of entities) {
+    const desiredCharacterId = resolveCharacterIdForEntity(e.id, humanId, humanCharacterId);
+    void applyCharacterMesh(e, assets, desiredCharacterId);
+  }
   return { human, entities };
 }
 
@@ -96,4 +108,76 @@ function pickSpawn(world: World, id: string, team: TeamId): THREE.Vector3 {
 
   const idx = parseInt(id.replace('p', ''), 10) - 1;
   return (arena.ffaSpawns[idx % arena.ffaSpawns.length] ?? arena.ffaSpawns[0]).clone();
+}
+
+function resolveCharacterIdForEntity(entityId: string, humanId: string, humanCharacterId?: CharacterId): CharacterId {
+  if (entityId === humanId && humanCharacterId) return humanCharacterId;
+  return DEFAULT_CHARACTER_BY_ID[entityId] ?? 'liuBei';
+}
+
+async function applyCharacterMesh(entity: Entity, assets: Assets, characterId: CharacterId): Promise<void> {
+  try {
+    await assets.loadManifest();
+  } catch {
+    return;
+  }
+
+  const path = assets.getManifestPath('sanguoShooter', 'characters', characterId);
+  if (!path) return;
+
+  const placeholder = entity.mesh;
+  const parent = placeholder.parent;
+  if (!parent) return;
+
+  try {
+    const gltf = await assets.cloneGltf(path);
+    const root = gltf.root;
+    const tintColor = CHARACTER_CONFIGS[characterId].primaryColor;
+    (root.userData as { animationClips?: THREE.AnimationClip[] }).animationClips = gltf.animations;
+
+    root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.material = cloneAndTintMaterial(mesh.material, tintColor);
+    });
+
+    const box = new THREE.Box3().setFromObject(root);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const height = size.y;
+    if (height > 1e-3) {
+      const targetHeight = 1.35;
+      root.scale.setScalar(targetHeight / height);
+    }
+
+    if (entity.mesh !== placeholder) return;
+    if (!placeholder.parent) return;
+
+    parent.add(root);
+    entity.mesh = root;
+    syncVisual(entity);
+
+    parent.remove(placeholder);
+  } catch {
+    // ignored
+  }
+}
+
+function cloneAndTintMaterial(material: THREE.Material | THREE.Material[], colorHex: number): THREE.Material | THREE.Material[] {
+  if (Array.isArray(material)) {
+    return material.map((m) => cloneAndTintMaterial(m, colorHex) as THREE.Material);
+  }
+
+  const asStandard = material as THREE.MeshStandardMaterial;
+  if (asStandard.isMeshStandardMaterial) {
+    const cloned = asStandard.clone();
+    cloned.color.setHex(colorHex);
+    cloned.emissive.setHex(colorHex);
+    cloned.emissiveIntensity = Math.max(cloned.emissiveIntensity, 0.15);
+    return cloned;
+  }
+
+  return material;
 }

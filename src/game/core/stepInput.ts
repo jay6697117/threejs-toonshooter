@@ -29,8 +29,11 @@ export type StepInputBuffer = {
   isDown: (action: InputAction) => boolean;
   consumePressed: (action: InputAction) => boolean;
   consumeReleased: (action: InputAction) => boolean;
+  endStep: () => void;
   getAimPoint: () => THREE.Vector3 | null;
   getDownMap: () => Record<InputAction, boolean>;
+  getPressedMap: () => Record<InputAction, boolean>;
+  getReleasedMap: () => Record<InputAction, boolean>;
 };
 
 export function createStepInputBuffer(): StepInputBuffer {
@@ -71,10 +74,18 @@ export function createStepInputBuffer(): StepInputBuffer {
     return value;
   };
 
+  const endStep = (): void => {
+    for (const key of Object.keys(pressed) as InputAction[]) {
+      pressed[key] = false;
+      released[key] = false;
+    }
+  };
+
   const getAimPoint = (): THREE.Vector3 | null => aimPoint;
 
   const getDownMap = (): Record<InputAction, boolean> => ({ ...down });
+  const getPressedMap = (): Record<InputAction, boolean> => ({ ...pressed });
+  const getReleasedMap = (): Record<InputAction, boolean> => ({ ...released });
 
-  return { setFromSnapshot, setFromReplayStep, isDown, consumePressed, consumeReleased, getAimPoint, getDownMap };
+  return { setFromSnapshot, setFromReplayStep, isDown, consumePressed, consumeReleased, endStep, getAimPoint, getDownMap, getPressedMap, getReleasedMap };
 }
-

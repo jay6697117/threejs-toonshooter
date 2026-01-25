@@ -6,11 +6,11 @@ export type DifficultyConfig = {
   name: string;
   aiAimErrorMultiplier: number;
   aiFireConfidenceMultiplier: number;
+  aiThinkIntervalSteps: number;
 };
 
 export const DIFFICULTY_CONFIGS: Record<DifficultyId, DifficultyConfig> = {
-  easy: { id: 'easy', name: 'Easy', aiAimErrorMultiplier: 1.6, aiFireConfidenceMultiplier: 0.75 },
-  normal: { id: 'normal', name: 'Normal', aiAimErrorMultiplier: 1.0, aiFireConfidenceMultiplier: 1.0 },
-  hard: { id: 'hard', name: 'Hard', aiAimErrorMultiplier: 0.7, aiFireConfidenceMultiplier: 1.15 }
+  easy: { id: 'easy', name: 'Easy', aiAimErrorMultiplier: 1.6, aiFireConfidenceMultiplier: 0.75, aiThinkIntervalSteps: 3 },
+  normal: { id: 'normal', name: 'Normal', aiAimErrorMultiplier: 1.0, aiFireConfidenceMultiplier: 1.0, aiThinkIntervalSteps: 2 },
+  hard: { id: 'hard', name: 'Hard', aiAimErrorMultiplier: 0.7, aiFireConfidenceMultiplier: 1.15, aiThinkIntervalSteps: 1 }
 };
-

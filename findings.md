@@ -24,9 +24,11 @@
 - Phase 0：已完成（Vite + TS、多入口、保留 legacy、build+preview 路由 OK）。
 - Phase 1-4：已完成 first playable pass（core runtime、world/entities、combat 基础、15 武器第一版）。
 - Phase 5：已完成 first playable pass（9 throwables + smoke/poison/areas/traps）。
-- Phase 6：部分完成（10 场景 defs + 场景事件/区域 + debug；仍缺 `climbable` 与 per-scene preload groups）。
+- Phase 6：已完成（10 场景 defs + 场景事件/区域 + debug + `climbable` + per-scene preload groups）。
 - Phase 7-9：已完成（4 modes + AI（含 nav/A*）+ UI/HUD/overlays）。
-- Phase 10-12：仍待推进（更完整 VFX/SFX、`assets.json` 扩展与资产替换、seedable RNG+replay、单测、性能预算）。
+- Phase 10：已完成（VFX/SFX feedback chain：near-miss/slowmo/impact/throwables hooks）。
+- Phase 11：已完成（角色 glTF + AnimationMixer；场景 cover glTF 替换并校准 AABB）。
+- Phase 12：已完成（seedable RNG + record/replay + `node --test` + perf budget + projectile pool + Vercel smoke checklist）。
 - 配置基线已固化并在启动时校验：
   - IDs: `src/game/config/ids.ts`
   - Weapons: `src/game/config/weapons.ts`

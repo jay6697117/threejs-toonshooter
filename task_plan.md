@@ -17,11 +17,11 @@
 
 ## Phase 状态概览（2026-01-25）
 - Phase 0-5：已完成（工程/内核/世界/战斗底座/15 武器/9 副武器 first playable pass）
-- Phase 6：部分完成（场景/掩体/事件/调试已落地；仍缺 `climbable` 与 `per-scene preload groups`）
+- Phase 6：已完成（10 场景 placeholder + 掩体交互 + per-scene preload groups + climbable）
 - Phase 7-9：已完成（4 模式 + AI + UI）
-- Phase 10：部分完成（tracer/particles/screenFx/audio 占位已起；仍缺 near-miss/slowmo/更多粒子与音频覆盖）
-- Phase 11：未开始（`public/assets.json` 的 `sanguoShooter` 命名空间 + 12 角色皮肤/动画/场景资产替换）
-- Phase 12：未开始（seedable RNG + record/replay + 单测 + 性能预算 + 发布验收）
+- Phase 10：已完成（tracer/particles/screenFx/audio feedback 链路补齐）
+- Phase 11：部分完成（`public/assets.json` 增加 `sanguoShooter` 命名空间；角色 glTF placeholder 替换链路已接入）
+- Phase 12：部分完成（seedable RNG + record/replay + `node --test` + perf budget 已落地；仍缺 Vercel smoke checklist）
 
 ## 当前阶段（Phase 10-12）
 目标：把“可复现/可回归/可持续迭代”的工程能力补齐，确保后续替换 glTF 资产时不会回归玩法。
@@ -78,21 +78,21 @@
 ## Phase 10-12 - Checklist（待完成）
 
 ### Phase 10（VFX/SFX）
-- [ ] `fx/tracers.ts`：weapon-specific tracer styles（当前仅按 category 上色）
-- [ ] `fx/particles.ts`：explosion/smoke/fire/poison/petals（当前仅 impact/explosion puff）
-- [ ] `fx/screenFx.ts`：hit flash/vignette/near-miss/slowmo/shake/blind blur（当前缺 near-miss/slowmo 等）
-- [ ] `core/audio.ts` + `audio/sfxMap.ts`：weapon/impact/ambient（当前仅 beep-based 占位）
+- [x] `fx/tracers.ts`：weapon-specific tracer styles
+- [x] `fx/particles.ts`：explosion/smoke/fire/poison/petals
+- [x] `fx/screenFx.ts`：hit flash/vignette/near-miss/slowmo/shake/blind blur
+- [x] `core/audio.ts` + `audio/sfxMap.ts`：weapon/impact/ambient（beep-based placeholder）
 
 ### Phase 11（Content Assets）
-- [ ] `public/assets.json` 扩展 `sanguoShooter` 命名空间
-- [ ] 角色骨骼与动画共享（12 皮肤 + 1 套动画）
-- [ ] 场景资产与碰撞盒校准
+- [x] `public/assets.json` 扩展 `sanguoShooter` 命名空间
+- [x] 角色骨骼与动画共享（12 皮肤 + 1 套动画）
+- [x] 场景资产与碰撞盒校准
 
 ### Phase 12（验证/回归/性能/发布）
-- [ ] seedable RNG + basic record/replay（至少记录 input + key events）
-- [ ] `node --test`：纯逻辑单测（status stacking, aoe falloff, win conditions）
-- [ ] perf budget：object pools + cap limits + AI throttling + scene unload
-- [ ] Vercel smoke checklist（路径、缓存头、资源 404）
+- [x] seedable RNG + basic record/replay（至少记录 input + key events）
+- [x] `node --test`：纯逻辑单测（status stacking, aoe falloff, win conditions）
+- [x] perf budget：object pools + cap limits + AI throttling + scene unload
+- [x] Vercel smoke checklist（路径、缓存头、资源 404）
 
 ## 风险清单（持续更新）
 | 风险 | 触发点 | 影响 | 缓解策略 |

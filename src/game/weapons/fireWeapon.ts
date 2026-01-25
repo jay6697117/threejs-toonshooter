@@ -8,7 +8,7 @@ import { dealDamage } from '../combat/damage';
 import { applyDamageToCover } from '../combat/coverDamage';
 import { raycast, raycastAll } from '../combat/raycast';
 import { applyStatus } from '../combat/statusEffects';
-import type { Projectile } from './projectile';
+import { acquireProjectileMesh, type Projectile } from './projectile';
 
 export type FireContext = {
   scene: THREE.Scene;
@@ -18,7 +18,13 @@ export type FireContext = {
 };
 
 export type FireResult =
-  | { type: 'hitscan'; hit: 'none' | 'entity' | 'cover'; ammoConsumed: number }
+  | {
+      type: 'hitscan';
+      hit: 'none' | 'entity' | 'cover';
+      ammoConsumed: number;
+      tracerEnd: THREE.Vector3;
+      impactPoint: THREE.Vector3 | null;
+    }
   | { type: 'projectile'; projectileId: string; ammoConsumed: number };
 
 export function fireWeapon(
@@ -42,6 +48,7 @@ export function fireWeapon(
   if (cfg.trajectory.kind === 'hitscan') {
     const range = resolveRangeMeters(cfg.rangeMeters, chargeRatio);
     const baseDamage = resolveDamage(cfg.damage, chargeRatio) * (attacker.damageDealtMultiplier ?? 1);
+    const tracerEndDefault = muzzle.clone().addScaledVector(direction, range);
 
     const shotsPerTrigger = cfg.special.kind === 'doubleShot' ? 2 : 1;
     const ammoConsumed = cfg.special.kind === 'doubleShot' ? 2 : 1;
@@ -49,6 +56,7 @@ export function fireWeapon(
     const spread = pellets > 1 ? 0.08 : 0.0;
 
     let overall: 'none' | 'entity' | 'cover' = 'none';
+    let nearestImpact: { point: THREE.Vector3; distance: number } | null = null;
 
     for (let shot = 0; shot < shotsPerTrigger; shot += 1) {
       for (let pellet = 0; pellet < pellets; pellet += 1) {
@@ -74,8 +82,14 @@ export function fireWeapon(
                 attackerTeam: attacker.team,
                 rng
               });
+              if (!nearestImpact || hit.distance < nearestImpact.distance) {
+                nearestImpact = { point: hit.point.clone(), distance: hit.distance };
+              }
               if (overall === 'none') overall = 'cover';
               break;
+            }
+            if (!nearestImpact || hit.distance < nearestImpact.distance) {
+              nearestImpact = { point: hit.point.clone(), distance: hit.distance };
             }
             applyWeaponHitToEntity(attacker, cfg.id, hit.entity, dir, { damageAmount: baseDamage, chargeRatio });
             overall = 'entity';
@@ -86,16 +100,19 @@ export function fireWeapon(
           continue;
         }
 
-          const hit = raycast({
-            origin: muzzle,
-            direction: dir,
-            maxDistance: range,
-            entities: context.entities,
-            covers: context.covers,
-            ignoreTeam: attacker.team
-          });
+        const hit = raycast({
+          origin: muzzle,
+          direction: dir,
+          maxDistance: range,
+          entities: context.entities,
+          covers: context.covers,
+          ignoreTeam: attacker.team
+        });
 
         if (!hit) continue;
+        if (!nearestImpact || hit.distance < nearestImpact.distance) {
+          nearestImpact = { point: hit.point.clone(), distance: hit.distance };
+        }
         if (hit.type === 'entity') {
           applyWeaponHitToEntity(attacker, cfg.id, hit.entity, dir, { damageAmount: baseDamage, chargeRatio });
           overall = 'entity';
@@ -111,7 +128,13 @@ export function fireWeapon(
       }
     }
 
-    return { type: 'hitscan', hit: overall, ammoConsumed };
+    return {
+      type: 'hitscan',
+      hit: overall,
+      ammoConsumed,
+      tracerEnd: nearestImpact?.point ?? tracerEndDefault,
+      impactPoint: nearestImpact?.point ?? null
+    };
   }
 
   const idSuffix = rng ? rng.nextUint32().toString(36) : String(Math.floor(Math.random() * 1e9));
@@ -127,7 +150,7 @@ export function fireWeapon(
   if (projKind === 'returning') velocity.y = 0;
   if (projKind === 'grapple') velocity.y = 0;
 
-  const mesh = createProjectileMesh(weaponId);
+  const mesh = acquireProjectileMesh(weaponId);
   mesh.position.copy(muzzle);
   context.scene.add(mesh);
 
@@ -189,24 +212,6 @@ export function applyWeaponHitToEntity(
       target.position.addScaledVector(dir, -cfg.special.distance);
     }
   }
-}
-
-function createProjectileMesh(weaponId: WeaponId): THREE.Object3D {
-  const cfg = WEAPON_CONFIGS[weaponId];
-  const color =
-    cfg.category === 'melee'
-      ? 0xbcc6d8
-      : cfg.category === 'mid'
-        ? 0x79d5ff
-        : cfg.category === 'ranged'
-          ? 0xffc44d
-          : 0xff6b6b;
-
-  const geo = new THREE.SphereGeometry(0.12, 12, 12);
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.2, emissive: new THREE.Color(color), emissiveIntensity: 0.25 });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.castShadow = true;
-  return mesh;
 }
 
 function resolveRangeMeters(rangeMeters: number | { min: number; max: number }, chargeRatio: number): number {

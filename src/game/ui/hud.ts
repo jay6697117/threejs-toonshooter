@@ -78,7 +78,7 @@ export function createHud(root: HTMLElement): HudUi {
     const hpPct = h.maxHp > 0 ? Math.max(0, Math.min(1, h.hp / h.maxHp)) : 0;
     const hpBar = `${'█'.repeat(Math.round(hpPct * 12)).padEnd(12, '░')}`;
 
-    modeLine.textContent = `mode=${state.modeId} scene=${state.sceneId} difficulty=${new URLSearchParams(window.location.search).get('difficulty') ?? 'normal'}`;
+    modeLine.textContent = `mode=${state.modeId} scene=${state.sceneId} difficulty=${state.difficultyId} seed=${state.seed} ts=${state.timeScale.toFixed(2)} nm=${state.nearMissAmount.toFixed(2)} replay=${state.replay.mode} step=${state.stepIndex}`;
     hpLine.textContent = `hp=${h.hp.toFixed(0)}/${h.maxHp.toFixed(0)} [${hpBar}] lives=${h.livesLeft} k/d=${h.kills}/${h.deaths} score=${h.score}`;
     weaponLine.textContent = `weapon=${h.activeWeaponId ?? 'none'} slot=${h.activeWeaponSlot + 1}`;
 

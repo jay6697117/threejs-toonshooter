@@ -38,7 +38,7 @@ export type CtfModeConfig = {
 
 export type ModeConfig = DuelModeConfig | FfaModeConfig | SiegeModeConfig | CtfModeConfig;
 
-export const MODE_CONFIGS: Record<ModeId, ModeConfig> = {
+export const MODE_CONFIGS = {
   duel: {
     id: 'duel',
     name: 'Duel',
@@ -71,5 +71,4 @@ export const MODE_CONFIGS: Record<ModeId, ModeConfig> = {
     scoreToWin: 3,
     carrierCanUseWeapons: false
   }
-};
-
+} as const satisfies Record<ModeId, ModeConfig>;

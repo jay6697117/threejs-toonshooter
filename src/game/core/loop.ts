@@ -10,6 +10,7 @@ export type FixedLoopOptions = {
   clock: THREE.Clock;
   fixedDt: number;
   maxFrameDt?: number;
+  getTimeScale?: () => number;
 };
 
 export function startFixedLoop(options: FixedLoopOptions, callbacks: FixedLoopCallbacks): () => void {
@@ -18,12 +19,14 @@ export function startFixedLoop(options: FixedLoopOptions, callbacks: FixedLoopCa
   let rafId = 0;
 
   const frame = (): void => {
-    const frameDt = Math.min(options.clock.getDelta(), maxFrameDt);
-    callbacks.onBeginFrame?.(frameDt);
-    accumulator += frameDt;
+    const rawFrameDt = Math.min(options.clock.getDelta(), maxFrameDt);
+    callbacks.onBeginFrame?.(rawFrameDt);
+    accumulator += rawFrameDt;
 
     while (accumulator >= options.fixedDt) {
-      callbacks.onStep(options.fixedDt);
+      const timeScaleRaw = options.getTimeScale?.() ?? 1;
+      const timeScale = Number.isFinite(timeScaleRaw) ? Math.max(0, Math.min(3, timeScaleRaw)) : 1;
+      callbacks.onStep(options.fixedDt * timeScale);
       accumulator -= options.fixedDt;
     }
 

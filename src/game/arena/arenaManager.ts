@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import type { ModeId, SceneId } from '../config/ids';
-import { ARENA_SCENES, type ArenaSceneDef, type ArenaZone } from './sceneDefinitions';
-import { createBoxCover, type Cover } from './cover';
+import { ARENA_SCENES, type ArenaGltfAssetRef, type ArenaSceneDef, type ArenaZone } from './sceneDefinitions';
+import { createBoxCover, updateCoverAabb, type Cover } from './cover';
 import { createHealthPickup, createThrowablePickup, createWeaponPickup, type Pickup } from './pickups';
 import type { World } from '../core/world';
 import { applyStatus } from '../combat/statusEffects';
 import { dealDamage } from '../combat/damage';
+import type { Assets } from '../core/assets';
+import { disposeObject3D } from '../core/dispose';
 
 const TRAP_CENTER = new THREE.Vector3(0, 0, 0);
 
@@ -16,7 +18,13 @@ export type ArenaRuntime = {
   objects: THREE.Object3D[];
 };
 
-export function loadArena(scene: THREE.Scene, world: World, modeId: ModeId, sceneId: SceneId, options?: { arenaScale?: number }): ArenaRuntime {
+export function loadArena(
+  scene: THREE.Scene,
+  world: World,
+  modeId: ModeId,
+  sceneId: SceneId,
+  options?: { arenaScale?: number; assets?: Assets }
+): ArenaRuntime {
   const def = ARENA_SCENES[sceneId];
   if (!def.supportedModes.includes(modeId)) {
     throw new Error(`Arena scene ${sceneId} does not support mode ${modeId}`);
@@ -32,6 +40,12 @@ export function loadArena(scene: THREE.Scene, world: World, modeId: ModeId, scen
 
   const objects: THREE.Object3D[] = [ground];
 
+  if (options?.assets) {
+    for (const group of def.preload ?? []) {
+      void options.assets.preload(group.namespace, group.category, group.keys);
+    }
+  }
+
   for (const c of def.covers) {
     const cover = createBoxCover({
       id: c.id,
@@ -42,6 +56,7 @@ export function loadArena(scene: THREE.Scene, world: World, modeId: ModeId, scen
     });
     cover.burnable = c.burnable ?? false;
     cover.pushable = c.pushable ?? false;
+    cover.climbable = c.climbable ?? false;
     cover.toggleable = c.toggleable ?? false;
     cover.blocksProjectiles = c.blocksProjectiles ?? true;
     cover.burnTimeLeftSeconds = 0;
@@ -54,6 +69,10 @@ export function loadArena(scene: THREE.Scene, world: World, modeId: ModeId, scen
     scene.add(cover.mesh);
     world.covers.push(cover);
     objects.push(cover.mesh);
+
+    if (options?.assets && c.gltf) {
+      void applyCoverGltf(scene, options.assets, cover, c.size, c.gltf);
+    }
   }
 
   for (const p of def.pickups) {
@@ -108,31 +127,113 @@ export function updateArena(world: World, dt: number): void {
   updateBurningCovers(world, dt);
 }
 
+async function applyCoverGltf(
+  scene: THREE.Scene,
+  assets: Assets,
+  cover: Cover,
+  targetSize: THREE.Vector3,
+  ref: ArenaGltfAssetRef
+): Promise<void> {
+  try {
+    await assets.loadManifest();
+  } catch {
+    return;
+  }
+
+  const path = assets.getManifestPath(ref.namespace, ref.category, ref.key);
+  if (!path) return;
+
+  const placeholder = cover.mesh;
+  const parent = placeholder.parent;
+  if (!parent) return;
+
+  try {
+    const gltf = await assets.cloneGltf(path);
+    const root = gltf.root;
+    root.rotation.y = ref.rotationY ?? 0;
+
+    root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    });
+
+    const box0 = new THREE.Box3().setFromObject(root);
+    const size0 = new THREE.Vector3();
+    box0.getSize(size0);
+
+    const sx = size0.x > 1e-3 ? targetSize.x / size0.x : 1;
+    const sy = size0.y > 1e-3 ? targetSize.y / size0.y : 1;
+    const sz = size0.z > 1e-3 ? targetSize.z / size0.z : 1;
+    root.scale.set(sx, sy, sz);
+    root.updateWorldMatrix(true, true);
+
+    const box1 = new THREE.Box3().setFromObject(root);
+    const center = new THREE.Vector3();
+    box1.getCenter(center);
+
+    const targetCenter = placeholder.position.clone().add(ref.offset ? ref.offset.clone() : new THREE.Vector3());
+    const delta = targetCenter.sub(center);
+    root.position.add(delta);
+
+    if (cover.mesh !== placeholder) {
+      scene.remove(root);
+      disposeObject3D(root);
+      return;
+    }
+    if (!placeholder.parent) {
+      scene.remove(root);
+      disposeObject3D(root);
+      return;
+    }
+
+    root.visible = placeholder.visible;
+    parent.add(root);
+    cover.mesh = root;
+    updateCoverAabb(cover);
+
+    parent.remove(placeholder);
+    disposeObject3D(placeholder);
+  } catch {
+    // ignored
+  }
+}
+
 export function clearArena(scene: THREE.Scene, world: World): void {
+  const disposeQueue = new Set<THREE.Object3D>();
+
   for (const obj of world.arena?.runtimeObjects ?? []) {
-    scene.remove(obj);
+    disposeQueue.add(obj);
   }
 
   for (const cover of world.covers) {
-    scene.remove(cover.mesh);
+    disposeQueue.add(cover.mesh);
   }
+
   for (const pickup of world.pickups) {
-    scene.remove(pickup.mesh);
+    disposeQueue.add(pickup.mesh);
   }
+
   for (const proj of world.projectiles) {
-    scene.remove(proj.mesh);
+    disposeQueue.add(proj.mesh);
   }
   for (const proj of world.throwableProjectiles) {
-    scene.remove(proj.mesh);
+    disposeQueue.add(proj.mesh);
   }
   for (const s of world.smokes) {
-    scene.remove(s.mesh);
+    disposeQueue.add(s.mesh);
   }
   for (const a of world.areas) {
-    scene.remove(a.mesh);
+    disposeQueue.add(a.mesh);
   }
   for (const t of world.traps) {
-    scene.remove(t.mesh);
+    disposeQueue.add(t.mesh);
+  }
+
+  for (const obj of disposeQueue) {
+    scene.remove(obj);
+    disposeObject3D(obj);
   }
 
   world.covers.length = 0;

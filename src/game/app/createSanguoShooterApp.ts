@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createBoxCover, updateCoverAabb, type Cover } from '../arena/cover';
 import { createWeaponPickup, updatePickups } from '../arena/pickups';
-import { loadArena, updateArena } from '../arena/arenaManager';
+import { clearArena, loadArena, updateArena } from '../arena/arenaManager';
 import { buildNavGrid, type NavGrid } from '../arena/navGraph';
 import { applyExplosion } from '../combat/areaDamage';
 import { clampToBounds, resolveCircleVsAabb, resolveCircleVsCircle } from '../combat/collision';
@@ -11,7 +11,7 @@ import { updateStatusEffects } from '../combat/statusEffects';
 import { DIFFICULTY_CONFIGS, DIFFICULTY_IDS, type DifficultyId } from '../config/difficulty';
 import { GAME_CONFIG } from '../config/game';
 import { MODE_CONFIGS } from '../config/modes';
-import { CHARACTER_IDS, MODE_IDS, SCENE_IDS, type CharacterId, type ModeId, type SceneId, type WeaponId } from '../config/ids';
+import { CHARACTER_IDS, MODE_IDS, SCENE_IDS, WEAPON_IDS, type CharacterId, type ModeId, type SceneId, type WeaponId } from '../config/ids';
 import { WEAPON_CONFIGS } from '../config/weapons';
 import { AudioManager } from '../core/audio';
 import { Assets } from '../core/assets';
@@ -23,19 +23,23 @@ import { resizeRendererToDisplaySize } from '../core/resize';
 import { loadSettings, saveSettings } from '../core/storage';
 import { createWorld, type World } from '../core/world';
 import { createDefaultSeed, hashStringToSeed } from '../core/rng';
+import { createStepInputBuffer } from '../core/stepInput';
+import { disposeObject3D } from '../core/dispose';
+import { createReplayPlayer, createReplayRecorder, loadReplayFromStorage, saveReplayToStorage } from '../replay/replay';
 import { createArenaDebug } from '../debug/arenaDebug';
-import { createTracerSystem } from '../fx/tracers';
+import { createTracerSystem, getTracerStyleForWeapon } from '../fx/tracers';
 import { createParticleSystem } from '../fx/particles';
+import { createCharacterAnimationSystem } from '../fx/characterAnimations';
 import { syncVisual } from '../entities/entityBase';
 import { updatePlayer } from '../entities/player';
 import { updateCharacterMovement } from '../entities/movement';
-import { ensureAiControllerState, computeAiFrame, type AiControllerState } from '../entities/aiController';
+import { ensureAiControllerState, computeAiFrameThrottled, type AiControllerState } from '../entities/aiController';
 import { createMatchRuntime, initializeMatchPlayers, processDeaths, updateMatch, applyRespawns } from '../modes/modeManager';
 import { spawnPlayersForMode } from '../modes/spawnPlayers';
 import { applyWeaponHitToEntity } from '../weapons/fireWeapon';
-import { type Projectile, updateProjectiles } from '../weapons/projectile';
+import { disposeProjectileMeshPool, releaseProjectileMesh, type Projectile, updateProjectiles } from '../weapons/projectile';
 import { updateWeapons } from '../weapons/weaponManager';
-import { cycleActiveThrowableSlot, tryUseActiveThrowable, updateThrowables } from '../throwables/throwableManager';
+import { cycleActiveThrowableSlot, tryUseActiveThrowable, updateThrowables, type ThrowablesFxEvent } from '../throwables/throwableManager';
 import type { SanguoShooterUiState } from './uiState';
 
 export type SanguoShooterApp = {
@@ -45,6 +49,7 @@ export type SanguoShooterApp = {
   input: InputManager;
   assets: Assets;
   audio: AudioManager;
+  getTimeScale: () => number;
   beginFrame: (frameDt: number) => void;
   step: (fixedDt: number) => void;
   frame: (alpha: number) => void;
@@ -65,12 +70,30 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0f1c);
-  const { modeId, sceneId, difficultyId, characterId, seed } = resolveInitialMatchFromUrl();
-  const world = createWorld(scene, { seed });
+  const urlMatch = resolveInitialMatchFromUrl();
+  const replayMode = resolveReplayModeFromUrl();
+  const debugWeaponsWall = resolveDebugWeaponsWallFromUrl();
+  const replayData = replayMode === 'play' ? loadReplayFromStorage() : null;
+  const effectiveMatch = replayData
+    ? {
+        modeId: replayData.modeId,
+        sceneId: replayData.sceneId,
+        difficultyId: replayData.difficultyId,
+        characterId: replayData.characterId,
+        seed: replayData.seed
+      }
+    : urlMatch;
+  const world = createWorld(scene, { seed: effectiveMatch.seed });
   const arenaDebug = createArenaDebug(scene);
   let debugEnabled = false;
   const tracers = createTracerSystem(scene);
   const particles = createParticleSystem(scene);
+  const characterAnimations = createCharacterAnimationSystem();
+  const stepInput = createStepInputBuffer();
+  const replayRecorder = replayMode === 'record' ? createReplayRecorder() : null;
+  const replayPlayer = replayMode === 'play' && replayData ? createReplayPlayer(replayData) : null;
+  let replaySaved = false;
+  let replayFinished = false;
 
   const cameraRig = new CameraRig({
     fov: 50,
@@ -99,15 +122,39 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
   dir.shadow.camera.bottom = -12;
   scene.add(dir);
 
-  const difficulty = DIFFICULTY_CONFIGS[difficultyId];
-  const arenaScale = modeId === 'ffa' ? MODE_CONFIGS.ffa.arenaScale : 1;
-  loadArena(scene, world, modeId, sceneId, { arenaScale });
+  if (!replayData) {
+    ensureSeedInUrl(world.seed);
+  }
 
-  const match = createMatchRuntime(modeId, 'p1');
-  const { human } = spawnPlayersForMode(scene, world, assets, modeId, { humanId: match.humanId, humanCharacterId: characterId ?? undefined });
+  const difficulty = DIFFICULTY_CONFIGS[effectiveMatch.difficultyId];
+  const arenaScale = effectiveMatch.modeId === 'ffa' ? MODE_CONFIGS.ffa.arenaScale : 1;
+  loadArena(scene, world, effectiveMatch.modeId, effectiveMatch.sceneId, { arenaScale, assets });
+
+  const match = createMatchRuntime(effectiveMatch.modeId, 'p1');
+  const { human } = spawnPlayersForMode(scene, world, assets, effectiveMatch.modeId, { humanId: match.humanId, humanCharacterId: effectiveMatch.characterId ?? undefined });
   initializeMatchPlayers(world, match);
+  if (debugWeaponsWall && !replayPlayer) {
+    spawnWeaponWall(scene, world);
+  }
   const aiStates = new Map<string, AiControllerState>();
   let lastHumanHp = human.hp;
+  let lastMatchPhase: 'playing' | 'ended' = match.state.phase;
+  let lastHumanKills = human.kills;
+  let lastHumanDeaths = human.deaths;
+
+  const HITSTOP_STEPS = 6;
+  const HITSTOP_SCALE = 0;
+  const SLOWMO_STEPS_ON_KILL = 22;
+  const SLOWMO_STEPS_ON_DEATH = 26;
+  const SLOWMO_SCALE = 0.35;
+  const NEAR_MISS_THRESHOLD_METERS = 0.85;
+  const NEAR_MISS_COOLDOWN_STEPS = 10;
+
+  let hitstopStepsLeft = 0;
+  let slowmoStepsLeft = 0;
+  let currentTimeScale = 1;
+  let nearMissAmount = 0;
+  let nearMissCooldownStepsLeft = 0;
 
   let nextAirdropTimeSeconds = 18;
   let airdropSerial = 0;
@@ -128,64 +175,118 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
   canvas.addEventListener('pointerdown', onUnlock, { passive: true });
 
   let paused = false;
-  let dashRequested = false;
-  let frameAimPoint: THREE.Vector3 | null = null;
-  let frameFirePressed = false;
-  let frameFireReleased = false;
-  let frameReloadPressed = false;
-  let frameThrowPressed = false;
-  let frameInteractPressed = false;
+
+  const emitThrowableFx = (event: ThrowablesFxEvent): void => {
+    const distSq = human.position.distanceToSquared(event.pos);
+    const audible = distSq < 12 * 12;
+
+    if (event.type === 'explosion') {
+      particles.spawnExplosion(event.pos, { radius: event.radius });
+      if (audible) audio.playSfx('explosion');
+      return;
+    }
+
+    if (event.type === 'smoke') {
+      if (event.smokeType === 'poison') particles.spawnPoison(event.pos, { radius: event.radius * 0.35 });
+      else particles.spawnSmoke(event.pos, { radius: event.radius * 0.35 });
+      if (audible) audio.playSfx('smoke');
+      return;
+    }
+
+    if (event.type === 'area') {
+      particles.spawnSmoke(event.pos, { radius: event.radius * 0.25 });
+      return;
+    }
+
+    if (event.type === 'areaIgnite') {
+      particles.spawnFire(event.pos, { radius: event.radius * 0.3 });
+      if (audible) audio.playSfx('explosion');
+      return;
+    }
+
+    if (event.type === 'trapTrigger') {
+      particles.spawnImpact(event.pos, { color: 0xff6b6b });
+      if (audible) audio.playSfx('trapTrigger');
+    }
+  };
+
+  const getTimeScale = (): number => currentTimeScale;
 
   const beginFrame = (_frameDt: number): void => {
-    if (input.wasPressed('pause')) {
+    if (replayPlayer) return;
+
+    const pointer = input.getPointerNdc();
+    const hit = pointer.insideCanvas ? picker.pick(camera, pointer.x, pointer.y) : null;
+    const aimPoint = hit?.point ?? null;
+    stepInput.setFromSnapshot(input.snapshot(), aimPoint);
+  };
+
+  const step = (dt: number): void => {
+    const stepIndex = world.stepIndex;
+    world.stepIndex += 1;
+
+    if (replayPlayer) {
+      stepInput.setFromReplayStep(replayPlayer.getStepState(stepIndex));
+      if (!replayFinished && replayPlayer.isEnded(stepIndex)) {
+        replayFinished = true;
+        paused = true;
+      }
+    }
+
+    if (replayRecorder) {
+      replayRecorder.captureStep(stepIndex, {
+        down: stepInput.getDownMap(),
+        pressed: stepInput.getPressedMap(),
+        released: stepInput.getReleasedMap(),
+        aimPoint: stepInput.getAimPoint()
+      });
+    }
+
+    if (stepInput.consumePressed('pause')) {
       paused = !paused;
       audio.playSfx('uiToggle');
     }
 
-    if (input.wasPressed('toggleVisual')) {
+    if (stepInput.consumePressed('toggleVisual')) {
       debugEnabled = !debugEnabled;
       arenaDebug.setEnabled(debugEnabled);
       audio.playSfx('uiToggle');
     }
 
-    dashRequested = dashRequested || input.wasPressed('dash');
-
-    if (input.wasPressed('weaponSlot1')) human.activeWeaponSlot = 0;
-    if (input.wasPressed('weaponSlot2')) human.activeWeaponSlot = 1;
-    if (input.wasPressed('weaponSlot3')) human.activeWeaponSlot = 2;
-    if (input.wasPressed('aimSecondary')) cycleActiveThrowableSlot(human);
-
-    const pointer = input.getPointerNdc();
-    const hit = pointer.insideCanvas ? picker.pick(camera, pointer.x, pointer.y) : null;
-    frameAimPoint = hit?.point ?? null;
-
-    frameFirePressed = frameFirePressed || input.wasPressed('fire');
-    frameFireReleased = frameFireReleased || input.wasReleased('fire');
-    frameReloadPressed = frameReloadPressed || input.wasPressed('reload');
-    frameThrowPressed = frameThrowPressed || input.wasPressed('throw');
-    frameInteractPressed = frameInteractPressed || input.wasPressed('interact');
-  };
-
-  const step = (fixedDt: number): void => {
     if (paused) {
-      dashRequested = false;
-      frameFirePressed = false;
-      frameFireReleased = false;
-      frameReloadPressed = false;
-      frameThrowPressed = false;
-      frameInteractPressed = false;
+      void stepInput.consumePressed('dash');
+      void stepInput.consumePressed('weaponSlot1');
+      void stepInput.consumePressed('weaponSlot2');
+      void stepInput.consumePressed('weaponSlot3');
+      void stepInput.consumePressed('aimSecondary');
+      void stepInput.consumePressed('reload');
+      void stepInput.consumePressed('throw');
+      void stepInput.consumePressed('interact');
+      void stepInput.consumePressed('fire');
+      void stepInput.consumeReleased('fire');
+      stepInput.endStep();
       return;
     }
-    world.timeSeconds += fixedDt;
+    if (currentTimeScale === HITSTOP_SCALE && hitstopStepsLeft > 0) hitstopStepsLeft = Math.max(0, hitstopStepsLeft - 1);
+    if (currentTimeScale === SLOWMO_SCALE && slowmoStepsLeft > 0) slowmoStepsLeft = Math.max(0, slowmoStepsLeft - 1);
+    if (nearMissCooldownStepsLeft > 0) nearMissCooldownStepsLeft = Math.max(0, nearMissCooldownStepsLeft - 1);
+    nearMissAmount = Math.max(0, nearMissAmount - dt * 2.0);
+
+    world.timeSeconds += dt;
 
     for (const entity of world.entities) {
       if (entity.eliminated) continue;
-      updateStatusEffects(entity, fixedDt, (amount) => dealDamage(entity, amount, { isDot: true }));
+      updateStatusEffects(entity, dt, (amount) => dealDamage(entity, amount, { isDot: true }));
     }
 
-    const aimPoint = frameAimPoint;
-    updatePlayer(human, input, aimPoint, fixedDt, dashRequested);
-    dashRequested = false;
+    if (stepInput.consumePressed('weaponSlot1')) human.activeWeaponSlot = 0;
+    if (stepInput.consumePressed('weaponSlot2')) human.activeWeaponSlot = 1;
+    if (stepInput.consumePressed('weaponSlot3')) human.activeWeaponSlot = 2;
+    if (stepInput.consumePressed('aimSecondary')) cycleActiveThrowableSlot(human);
+
+    const aimPoint = stepInput.getAimPoint();
+    const dashRequested = stepInput.consumePressed('dash');
+    updatePlayer(human, stepInput, aimPoint, dt, dashRequested);
 
     const carrierRestricted =
       match.state.modeId === 'ctf' && MODE_CONFIGS.ctf.carrierCanUseWeapons === false && human.carryingFlag !== null;
@@ -193,42 +294,47 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
     const weaponResult = updateWeapons(
       human,
       {
-        fireDown: carrierRestricted ? false : input.isDown('fire'),
-        firePressed: carrierRestricted ? false : frameFirePressed,
-        fireReleased: carrierRestricted ? false : frameFireReleased,
-        reloadPressed: carrierRestricted ? false : frameReloadPressed
+        fireDown: carrierRestricted ? false : stepInput.isDown('fire'),
+        firePressed: carrierRestricted ? false : stepInput.consumePressed('fire'),
+        fireReleased: carrierRestricted ? false : stepInput.consumeReleased('fire'),
+        reloadPressed: carrierRestricted ? false : stepInput.consumePressed('reload')
       },
       aimPoint,
-      fixedDt,
+      dt,
       { scene, entities: world.entities, covers: world.covers, projectiles: world.projectiles, rng: world.rng }
     );
-    frameFirePressed = false;
-    frameFireReleased = false;
-    frameReloadPressed = false;
     if (weaponResult.shotsFired > 0) {
       audio.playSfx('weaponFire');
       const weaponId = human.weaponSlots[human.activeWeaponSlot];
-      if (weaponId && aimPoint) {
+      if (weaponId) {
         const muzzle = human.position.clone();
         muzzle.y += 1.1;
-        const end = aimPoint.clone();
-        end.y = muzzle.y;
-        tracers.spawn(muzzle, end, { color: tracerColorForWeapon(weaponId), width: 1, durationSeconds: 0.08 });
+        const style = getTracerStyleForWeapon(weaponId);
+        for (const result of weaponResult.fireResults) {
+          if (result.type !== 'hitscan') continue;
+          tracers.spawn(muzzle, result.tracerEnd, style);
+          if (result.impactPoint) {
+            particles.spawnImpact(result.impactPoint, { color: style.color });
+            if (result.hit === 'entity') audio.playSfx('weaponHit');
+            if (result.hit === 'cover') audio.playSfx('weaponImpact');
+          }
+        }
       }
     }
 
-    if (frameThrowPressed && !carrierRestricted) {
-      tryUseActiveThrowable(human, aimPoint, {
+    if (stepInput.consumePressed('throw') && !carrierRestricted) {
+      const used = tryUseActiveThrowable(human, aimPoint, {
         scene,
         entities: world.entities,
         throwableProjectiles: world.throwableProjectiles,
         smokes: world.smokes,
         areas: world.areas,
         traps: world.traps,
-        rng: world.rng
+        rng: world.rng,
+        emitFx: emitThrowableFx
       });
+      if (used) audio.playSfx('throw');
     }
-    frameThrowPressed = false;
 
     if (world.arena && world.timeSeconds >= nextNavRebuildTimeSeconds) {
       navGrid = buildNavGrid(world.arena.bounds, world.covers, { cellSize: 2.1, agentRadius: human.radius });
@@ -238,17 +344,40 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
     for (const entity of world.entities) {
       if (!entity.isAI) continue;
       const ai = ensureAiControllerState(aiStates, entity.id, world.rng);
-      const aiFrame = computeAiFrame(entity, ai, world, match, difficulty, fixedDt, navGrid, world.rng);
-      updateCharacterMovement(entity, aiFrame.moveDir, aiFrame.aimPoint, fixedDt, aiFrame.dashRequested);
-      const aiWeaponResult = updateWeapons(entity, aiFrame.weaponInput, aiFrame.aimPoint, fixedDt, { scene, entities: world.entities, covers: world.covers, projectiles: world.projectiles, rng: world.rng });
+      const weaponId = entity.weaponSlots[entity.activeWeaponSlot];
+      const thinkIntervalSteps = weaponId && WEAPON_CONFIGS[weaponId].charge ? 1 : difficulty.aiThinkIntervalSteps;
+      const aiFrame = computeAiFrameThrottled(entity, ai, world, match, difficulty, dt, navGrid, world.rng, { stepIndex, thinkIntervalSteps });
+      updateCharacterMovement(entity, aiFrame.moveDir, aiFrame.aimPoint, dt, aiFrame.dashRequested);
+      const aiWeaponResult = updateWeapons(entity, aiFrame.weaponInput, aiFrame.aimPoint, dt, {
+        scene,
+        entities: world.entities,
+        covers: world.covers,
+        projectiles: world.projectiles,
+        rng: world.rng
+      });
       if (aiWeaponResult.shotsFired > 0) {
-        const weaponId = entity.weaponSlots[entity.activeWeaponSlot];
-        if (weaponId && aiFrame.aimPoint) {
+        if (weaponId) {
           const muzzle = entity.position.clone();
           muzzle.y += 1.1;
-          const end = aiFrame.aimPoint.clone();
-          end.y = muzzle.y;
-          tracers.spawn(muzzle, end, { color: tracerColorForWeapon(weaponId), width: 1, durationSeconds: 0.08 });
+          const style = getTracerStyleForWeapon(weaponId);
+
+          for (const result of aiWeaponResult.fireResults) {
+            if (result.type !== 'hitscan') continue;
+            tracers.spawn(muzzle, result.tracerEnd, style);
+
+            if (!human.eliminated && entity.team !== human.team) {
+              const distSq = distanceSqPointToSegmentXZ(human.position, muzzle, result.tracerEnd);
+              if (distSq <= NEAR_MISS_THRESHOLD_METERS * NEAR_MISS_THRESHOLD_METERS) {
+                const dist = Math.sqrt(distSq);
+                const intensity = 1 - dist / Math.max(1e-6, NEAR_MISS_THRESHOLD_METERS);
+                nearMissAmount = Math.min(1, nearMissAmount + intensity * 0.7);
+                if (nearMissCooldownStepsLeft <= 0) {
+                  audio.playSfx('nearMiss');
+                  nearMissCooldownStepsLeft = NEAR_MISS_COOLDOWN_STEPS;
+                }
+              }
+            }
+          }
         }
       }
       if (aiFrame.throwRequested) {
@@ -259,7 +388,8 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
           smokes: world.smokes,
           areas: world.areas,
           traps: world.traps,
-          rng: world.rng
+          rng: world.rng,
+          emitFx: emitThrowableFx
         });
       }
     }
@@ -272,21 +402,23 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
         smokes: world.smokes,
         areas: world.areas,
         traps: world.traps,
-        rng: world.rng
+        rng: world.rng,
+        emitFx: emitThrowableFx
       },
-      fixedDt,
+      dt,
       world.timeSeconds
     );
 
-    updateArena(world, fixedDt);
+    updateArena(world, dt);
 
     for (const cover of world.covers) {
       if (!cover.active) continue;
       if (cover.timeLeftSeconds === undefined) continue;
-      cover.timeLeftSeconds = Math.max(0, cover.timeLeftSeconds - fixedDt);
+      cover.timeLeftSeconds = Math.max(0, cover.timeLeftSeconds - dt);
       if (cover.timeLeftSeconds <= 0) {
         cover.active = false;
         scene.remove(cover.mesh);
+        disposeObject3D(cover.mesh);
       }
     }
 
@@ -319,7 +451,7 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
           dir.y = 0;
           if (dir.lengthSq() > 1e-6) {
             dir.normalize();
-            cover.mesh.position.addScaledVector(dir, 1.2 * fixedDt);
+            cover.mesh.position.addScaledVector(dir, 1.2 * dt);
             updateCoverAabb(cover);
 
             const size = new THREE.Vector3();
@@ -343,7 +475,7 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
       }
     }
 
-    updatePickups(world.pickups, world.entities, fixedDt, world.timeSeconds);
+    updatePickups(world.pickups, world.entities, dt, world.timeSeconds);
 
     if (match.state.phase === 'playing' && world.timeSeconds >= nextAirdropTimeSeconds) {
       spawnAirdropWeapon(scene, world, airdropSerial);
@@ -352,22 +484,26 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
       audio.playSfx('airdrop');
     }
 
-    if (frameInteractPressed) {
+    if (stepInput.consumePressed('interact')) {
       const toggled = tryToggleNearestCover(world.covers, human.position);
-      if (toggled) audio.playSfx('uiClick');
-      frameInteractPressed = false;
+      if (toggled) {
+        audio.playSfx('uiClick');
+      } else {
+        const climbed = tryClimbNearestCover(world.covers, bounds, human);
+        if (climbed) audio.playSfx('uiClick');
+      }
     }
 
     const wind = world.arena?.wind;
     if (wind && wind.lengthSq() > 1e-6) {
       for (const p of world.projectiles) {
         if (p.kind !== 'ballistic' && p.kind !== 'bouncy') continue;
-        p.velocity.x += wind.x * fixedDt;
-        p.velocity.z += wind.z * fixedDt;
+        p.velocity.x += wind.x * dt;
+        p.velocity.z += wind.z * dt;
       }
     }
 
-    const projUpdates = updateProjectiles(world.projectiles, world.entities, world.covers, fixedDt);
+    const projUpdates = updateProjectiles(world.projectiles, world.entities, world.covers, dt);
     const remaining: Projectile[] = [];
     for (const u of projUpdates) {
       const { projectile: p, hit: h, remove } = u;
@@ -377,6 +513,7 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
       }
 
       const weaponCfg = WEAPON_CONFIGS[p.weaponId];
+      const weaponStyle = getTracerStyleForWeapon(p.weaponId);
 
       if (h) {
         const attacker = world.entities.find((e) => e.id === p.attackerId) ?? human;
@@ -385,7 +522,8 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
 
         if (h.type === 'entity') {
           applyWeaponHitToEntity(attacker, p.weaponId, h.entity, dir, { damageAmount: p.damageAmount });
-          particles.spawnImpact(h.point, { color: tracerColorForWeapon(p.weaponId) });
+          particles.spawnImpact(h.point, { color: weaponStyle.color });
+          if (human.position.distanceToSquared(h.point) < 10 * 10) audio.playSfx('weaponHit');
         }
         if (h.type === 'cover') {
           const ignite = weaponCfg.onHitEffects?.some((eff) => eff.kind === 'status' && eff.id === 'burn') ?? false;
@@ -396,6 +534,7 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
             rng: world.rng
           });
           particles.spawnImpact(h.point, { color: 0x9aa5b4 });
+          if (human.position.distanceToSquared(h.point) < 10 * 10) audio.playSfx('weaponImpact');
         }
 
         const impactPoint = h.type === 'entity' || h.type === 'cover' ? h.point : p.position;
@@ -420,7 +559,7 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
             knockbackDistance: 1.2,
             statusEffects: statusEffects.length > 0 ? statusEffects : undefined
           });
-          particles.spawnExplosion(impactPoint, { color: tracerColorForWeapon(p.weaponId), radius: weaponCfg.splash.radiusMeters });
+          particles.spawnExplosion(impactPoint, { color: weaponStyle.color, radius: weaponCfg.splash.radiusMeters });
           if (human.position.distanceToSquared(impactPoint) < 10 * 10) audio.playSfx('explosion');
         }
 
@@ -450,6 +589,7 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
 
       if (remove) {
         scene.remove(p.mesh);
+        releaseProjectileMesh(p.mesh);
       } else {
         remaining.push(p);
       }
@@ -457,20 +597,51 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
     world.projectiles = remaining;
 
     processDeaths(world, match);
-    updateMatch(world, match, fixedDt);
-    applyRespawns(world, match, fixedDt);
+    updateMatch(world, match, dt);
+    applyRespawns(world, match, dt);
     arenaDebug.update(world);
-    tracers.update(fixedDt);
-    particles.update(fixedDt);
+    tracers.update(dt);
+    particles.update(dt);
+    characterAnimations.update(world.entities, dt);
 
     if (!human.eliminated && human.hp < lastHumanHp - 1e-3) {
       cameraRig.addScreenShake({ durationSeconds: 0.12, intensityMeters: 0.18 });
       cameraRig.pulseFov(2.2, 0.12);
+      hitstopStepsLeft = Math.max(hitstopStepsLeft, HITSTOP_STEPS);
     }
     lastHumanHp = human.hp;
 
+    if (human.kills > lastHumanKills) {
+      slowmoStepsLeft = Math.max(slowmoStepsLeft, SLOWMO_STEPS_ON_KILL);
+    }
+    if (human.deaths > lastHumanDeaths) {
+      slowmoStepsLeft = Math.max(slowmoStepsLeft, SLOWMO_STEPS_ON_DEATH);
+    }
+    lastHumanKills = human.kills;
+    lastHumanDeaths = human.deaths;
+
     cameraRig.setTargetPosition(human.position);
-    cameraRig.update(fixedDt);
+    cameraRig.update(dt);
+
+    const nextTimeScale = hitstopStepsLeft > 0 ? HITSTOP_SCALE : slowmoStepsLeft > 0 ? SLOWMO_SCALE : 1;
+    if (currentTimeScale >= 0.999 && nextTimeScale < 0.999 && nextTimeScale > 0) audio.playSfx('slowmo');
+    currentTimeScale = nextTimeScale;
+
+    if (replayRecorder && !replaySaved && lastMatchPhase !== 'ended' && match.state.phase === 'ended') {
+      const data = replayRecorder.finalize(stepIndex, {
+        modeId: effectiveMatch.modeId,
+        sceneId: effectiveMatch.sceneId,
+        difficultyId: effectiveMatch.difficultyId,
+        characterId: effectiveMatch.characterId,
+        seed: world.seed,
+        fixedDt: dt
+      });
+      saveReplayToStorage(data);
+      replaySaved = true;
+      audio.playSfx('matchEnd');
+    }
+    lastMatchPhase = match.state.phase;
+    stepInput.endStep();
   };
 
   const frame = (_alpha: number): void => {
@@ -491,10 +662,14 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
   };
 
   const dispose = (): void => {
+    clearArena(scene, world);
     arenaDebug.dispose();
     tracers.dispose();
     particles.dispose();
+    characterAnimations.dispose();
+    disposeProjectileMeshPool();
     input.dispose();
+    renderer.dispose();
     saveSettings(settings);
   };
 
@@ -505,11 +680,21 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
 
     return {
       modeId: match.modeId,
-      sceneId: world.arena?.sceneId ?? sceneId,
+      sceneId: world.arena?.sceneId ?? effectiveMatch.sceneId,
+      difficultyId: effectiveMatch.difficultyId,
+      seed: world.seed,
+      timeScale: currentTimeScale,
+      nearMissAmount,
       paused,
-      scoreboardHeld: input.isDown('scoreboard'),
+      scoreboardHeld: stepInput.isDown('scoreboard'),
       match: match.state,
       timeSeconds: world.timeSeconds,
+      stepIndex: world.stepIndex,
+      replay: replayPlayer
+        ? { mode: 'play', endStepIndex: replayPlayer.replay.endStepIndex }
+        : replayRecorder
+          ? { mode: 'record', endStepIndex: null }
+          : { mode: 'none', endStepIndex: null },
       humanId: human.id,
       human: {
         id: human.id,
@@ -525,7 +710,7 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
         carryingFlag: human.carryingFlag,
         lastAttackerId: human.lastAttackerId,
         lastWeaponId: human.lastWeaponId,
-        characterId,
+        characterId: effectiveMatch.characterId,
         damageDealtMultiplier: human.damageDealtMultiplier,
         isInDark: human.isInDark,
         isInWater: human.isInWater,
@@ -572,7 +757,7 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
     paused = value;
   };
 
-  return { renderer, scene, camera, input, assets, audio, beginFrame, step, frame, getUiState, setPaused, dispose };
+  return { renderer, scene, camera, input, assets, audio, getTimeScale, beginFrame, step, frame, getUiState, setPaused, dispose };
 }
 
 function spawnAirdropWeapon(scene: THREE.Scene, world: World, serial: number): void {
@@ -586,6 +771,23 @@ function spawnAirdropWeapon(scene: THREE.Scene, world: World, serial: number): v
   const pickup = createWeaponPickup({ id: `airdrop_${serial}`, weaponId, pos: new THREE.Vector3(x, 0.2, z), color: 0xff6b6b });
   scene.add(pickup.mesh);
   world.pickups.push(pickup);
+}
+
+function spawnWeaponWall(scene: THREE.Scene, world: World): void {
+  if (!world.arena) return;
+  const bounds = world.arena.bounds;
+  const z = bounds.maxZ - 1.1;
+  const spacing = 1.3;
+  const startX = -((WEAPON_IDS.length - 1) * spacing) / 2;
+
+  for (let i = 0; i < WEAPON_IDS.length; i += 1) {
+    const weaponId = WEAPON_IDS[i];
+    const x = startX + i * spacing;
+    const id = `debug_weapon_${weaponId}`;
+    const pickup = createWeaponPickup({ id, weaponId, pos: new THREE.Vector3(x, 0.2, z), color: 0x79d5ff });
+    scene.add(pickup.mesh);
+    world.pickups.push(pickup);
+  }
 }
 
 function tryToggleNearestCover(covers: Cover[], pos: THREE.Vector3): boolean {
@@ -608,12 +810,81 @@ function tryToggleNearestCover(covers: Cover[], pos: THREE.Vector3): boolean {
   return true;
 }
 
-function tracerColorForWeapon(weaponId: WeaponId): number {
-  const cfg = WEAPON_CONFIGS[weaponId];
-  if (cfg.category === 'melee') return 0xbcc6d8;
-  if (cfg.category === 'mid') return 0x79d5ff;
-  if (cfg.category === 'ranged') return 0xffc44d;
-  return 0xff6b6b;
+function tryClimbNearestCover(
+  covers: Cover[],
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+  entity: { position: THREE.Vector3; radius: number; velocity: THREE.Vector3 }
+): boolean {
+  let best: { cover: Cover; distSq: number } | null = null;
+
+  for (const cover of covers) {
+    if (!cover.climbable) continue;
+    if (!cover.active) continue;
+    if (!cover.mesh.parent) continue;
+    const dx = cover.mesh.position.x - entity.position.x;
+    const dz = cover.mesh.position.z - entity.position.z;
+    const distSq = dx * dx + dz * dz;
+    if (distSq > 2.0 * 2.0) continue;
+    if (!best || distSq < best.distSq) best = { cover, distSq };
+  }
+
+  if (!best) return false;
+
+  const aabb = best.cover.aabb;
+  const margin = 0.25;
+  const radius = entity.radius;
+
+  const dLeft = Math.abs(entity.position.x - aabb.minX);
+  const dRight = Math.abs(aabb.maxX - entity.position.x);
+  const dBottom = Math.abs(entity.position.z - aabb.minZ);
+  const dTop = Math.abs(aabb.maxZ - entity.position.z);
+
+  let targetX = entity.position.x;
+  let targetZ = entity.position.z;
+
+  const min = Math.min(dLeft, dRight, dBottom, dTop);
+  if (min === dLeft) {
+    targetX = aabb.maxX + radius + margin;
+    targetZ = Math.max(aabb.minZ - radius, Math.min(aabb.maxZ + radius, entity.position.z));
+  } else if (min === dRight) {
+    targetX = aabb.minX - radius - margin;
+    targetZ = Math.max(aabb.minZ - radius, Math.min(aabb.maxZ + radius, entity.position.z));
+  } else if (min === dBottom) {
+    targetZ = aabb.maxZ + radius + margin;
+    targetX = Math.max(aabb.minX - radius, Math.min(aabb.maxX + radius, entity.position.x));
+  } else {
+    targetZ = aabb.minZ - radius - margin;
+    targetX = Math.max(aabb.minX - radius, Math.min(aabb.maxX + radius, entity.position.x));
+  }
+
+  entity.position.x = Math.max(bounds.minX + radius, Math.min(bounds.maxX - radius, targetX));
+  entity.position.z = Math.max(bounds.minZ + radius, Math.min(bounds.maxZ - radius, targetZ));
+  entity.velocity.x = 0;
+  entity.velocity.z = 0;
+  return true;
+}
+
+function distanceSqPointToSegmentXZ(point: THREE.Vector3, segStart: THREE.Vector3, segEnd: THREE.Vector3): number {
+  const ax = segStart.x;
+  const az = segStart.z;
+  const bx = segEnd.x;
+  const bz = segEnd.z;
+  const px = point.x;
+  const pz = point.z;
+
+  const abx = bx - ax;
+  const abz = bz - az;
+  const apx = px - ax;
+  const apz = pz - az;
+  const abLenSq = abx * abx + abz * abz;
+  if (abLenSq <= 1e-8) return apx * apx + apz * apz;
+
+  const t = Math.max(0, Math.min(1, (apx * abx + apz * abz) / abLenSq));
+  const cx = ax + abx * t;
+  const cz = az + abz * t;
+  const dx = px - cx;
+  const dz = pz - cz;
+  return dx * dx + dz * dz;
 }
 
 function resolveInitialMatchFromUrl(): {
@@ -662,4 +933,24 @@ function resolveSeed(seedRaw: string | null): number {
   const asNumber = Number(seedRaw);
   if (Number.isFinite(asNumber)) return (Math.floor(asNumber) >>> 0) || 0x12345678;
   return hashStringToSeed(seedRaw);
+}
+
+function resolveReplayModeFromUrl(): 'none' | 'record' | 'play' {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get('replay');
+  if (raw === 'record') return 'record';
+  if (raw === 'play') return 'play';
+  return 'none';
+}
+
+function resolveDebugWeaponsWallFromUrl(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('weaponsWall') === '1';
+}
+
+function ensureSeedInUrl(seed: number): void {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get('seed')) return;
+  url.searchParams.set('seed', String(seed >>> 0));
+  window.history.replaceState({}, '', url.toString());
 }

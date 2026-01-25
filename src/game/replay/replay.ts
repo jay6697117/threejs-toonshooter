@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { InputAction, InputSnapshot } from '../core/input';
+import type { InputAction } from '../core/input';
 import type { CharacterId, ModeId, SceneId } from '../config/ids';
 import type { DifficultyId } from '../config/difficulty';
 
@@ -76,7 +76,7 @@ export function clearReplayFromStorage(): void {
 }
 
 export type ReplayRecorder = {
-  captureFrame: (stepIndex: number, snapshot: InputSnapshot, aimPoint: THREE.Vector3 | null) => void;
+  captureStep: (stepIndex: number, state: { down: Record<InputAction, boolean>; pressed: Record<InputAction, boolean>; released: Record<InputAction, boolean>; aimPoint: THREE.Vector3 | null }) => void;
   finalize: (endStepIndex: number, fallback?: { modeId: ModeId; sceneId: SceneId; difficultyId: DifficultyId; characterId: CharacterId | null; seed: number; fixedDt: number }) => ReplayDataV1;
 };
 
@@ -87,25 +87,25 @@ export function createReplayRecorder(): ReplayRecorder {
   let initialAim: { x: number; y: number; z: number } | null = null;
   let lastAim: THREE.Vector3 | null = null;
 
-  const captureFrame = (stepIndex: number, snapshot: InputSnapshot, aimPoint: THREE.Vector3 | null): void => {
+  const captureStep = (stepIndex: number, state: { down: Record<InputAction, boolean>; pressed: Record<InputAction, boolean>; released: Record<InputAction, boolean>; aimPoint: THREE.Vector3 | null }): void => {
     if (!initialized) {
       for (const key of Object.keys(initialDown) as InputAction[]) {
-        initialDown[key] = snapshot.down[key];
+        initialDown[key] = state.down[key];
       }
-      if (aimPoint) {
-        initialAim = { x: aimPoint.x, y: aimPoint.y, z: aimPoint.z };
-        lastAim = aimPoint.clone();
+      if (state.aimPoint) {
+        initialAim = { x: state.aimPoint.x, y: state.aimPoint.y, z: state.aimPoint.z };
+        lastAim = state.aimPoint.clone();
       }
       initialized = true;
     }
 
     for (const key of Object.keys(initialDown) as InputAction[]) {
-      if (snapshot.justPressed[key]) events.push({ t: stepIndex, type: 'press', action: key });
-      if (snapshot.justReleased[key]) events.push({ t: stepIndex, type: 'release', action: key });
+      if (state.pressed[key]) events.push({ t: stepIndex, type: 'press', action: key });
+      if (state.released[key]) events.push({ t: stepIndex, type: 'release', action: key });
     }
 
     const aimEpsSq = 0.18 * 0.18;
-    if (!aimPoint) {
+    if (!state.aimPoint) {
       if (lastAim) {
         events.push({ t: stepIndex, type: 'aim', has: false });
         lastAim = null;
@@ -113,9 +113,9 @@ export function createReplayRecorder(): ReplayRecorder {
       return;
     }
 
-    if (!lastAim || aimPoint.distanceToSquared(lastAim) > aimEpsSq) {
-      events.push({ t: stepIndex, type: 'aim', has: true, x: aimPoint.x, y: aimPoint.y, z: aimPoint.z });
-      lastAim = aimPoint.clone();
+    if (!lastAim || state.aimPoint.distanceToSquared(lastAim) > aimEpsSq) {
+      events.push({ t: stepIndex, type: 'aim', has: true, x: state.aimPoint.x, y: state.aimPoint.y, z: state.aimPoint.z });
+      lastAim = state.aimPoint.clone();
     }
   };
 
@@ -143,7 +143,7 @@ export function createReplayRecorder(): ReplayRecorder {
     };
   };
 
-  return { captureFrame, finalize };
+  return { captureStep, finalize };
 }
 
 export type ReplayPlayer = {
@@ -189,4 +189,3 @@ export function createReplayPlayer(replay: ReplayDataV1): ReplayPlayer {
 
   return { replay, getStepState, isEnded };
 }
-

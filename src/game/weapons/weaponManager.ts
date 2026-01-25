@@ -41,7 +41,7 @@ export function updateWeapons(
   aimPoint: THREE.Vector3 | null,
   dt: number,
   context: WeaponManagerContext
-): { shotsFired: number } {
+): { shotsFired: number; fireResults: Array<ReturnType<typeof fireWeapon>> } {
   ensureEntityWeaponSlotStates(entity);
 
   for (const state of entity.weaponSlotStates) {
@@ -56,25 +56,25 @@ export function updateWeapons(
     }
   }
 
-  if (entity.eliminated) return { shotsFired: 0 };
+  if (entity.eliminated) return { shotsFired: 0, fireResults: [] };
 
   const weaponId = entity.weaponSlots[entity.activeWeaponSlot];
-  if (!weaponId) return { shotsFired: 0 };
+  if (!weaponId) return { shotsFired: 0, fireResults: [] };
   const state = entity.weaponSlotStates[entity.activeWeaponSlot];
-  if (!state) return { shotsFired: 0 };
+  if (!state) return { shotsFired: 0, fireResults: [] };
 
   if (input.reloadPressed) {
     tryStartReload(weaponId, state);
   }
 
-  if (!aimPoint) return { shotsFired: 0 };
-  if (state.reloadTimer > 0) return { shotsFired: 0 };
+  if (!aimPoint) return { shotsFired: 0, fireResults: [] };
+  if (state.reloadTimer > 0) return { shotsFired: 0, fireResults: [] };
 
   const cfg = WEAPON_CONFIGS[weaponId];
 
   if (cfg.special.kind === 'burstAll') {
     if (input.firePressed && state.burstShotsRemaining <= 0) {
-      if (!hasAmmo(weaponId, state, 1) && tryStartReload(weaponId, state)) return { shotsFired: 0 };
+      if (!hasAmmo(weaponId, state, 1) && tryStartReload(weaponId, state)) return { shotsFired: 0, fireResults: [] };
       if (state.ammo > 0) state.burstShotsRemaining = state.ammo;
     }
 
@@ -86,7 +86,7 @@ export function updateWeapons(
       return fired;
     }
 
-    return { shotsFired: 0 };
+    return { shotsFired: 0, fireResults: [] };
   }
 
   if (cfg.charge) {
@@ -99,11 +99,11 @@ export function updateWeapons(
       const requiredOk = cfg.charge.requiredFullCharge ? state.chargeSeconds >= cfg.charge.maxSeconds - 1e-3 : true;
       const minOk = state.chargeSeconds >= cfg.charge.minSeconds - 1e-3;
       state.chargeSeconds = 0;
-      if (!requiredOk || !minOk) return { shotsFired: 0 };
+      if (!requiredOk || !minOk) return { shotsFired: 0, fireResults: [] };
       return tryFireWeapon(entity, weaponId, state, aimPoint, context, chargeRatio);
     }
 
-    return { shotsFired: 0 };
+    return { shotsFired: 0, fireResults: [] };
   }
 
   state.chargeSeconds = 0;
@@ -111,31 +111,31 @@ export function updateWeapons(
     return tryFireWeapon(entity, weaponId, state, aimPoint, context, 1);
   }
 
-  return { shotsFired: 0 };
+  return { shotsFired: 0, fireResults: [] };
 }
 
 function tryFireWeapon(
   entity: Entity,
   weaponId: WeaponId,
-  state: { ammo: number; reserve: number; cooldownTimer: number },
+  state: { ammo: number; reserve: number; cooldownTimer: number; reloadTimer: number },
   aimPoint: THREE.Vector3,
   context: WeaponManagerContext,
   chargeRatio: number
-): { shotsFired: number } {
+): { shotsFired: number; fireResults: Array<ReturnType<typeof fireWeapon>> } {
   const cfg = WEAPON_CONFIGS[weaponId];
   const requiredAmmo = cfg.special.kind === 'doubleShot' ? 2 : 1;
 
-  if (state.cooldownTimer > 0) return { shotsFired: 0 };
+  if (state.cooldownTimer > 0) return { shotsFired: 0, fireResults: [] };
 
   if (!hasAmmo(weaponId, state, requiredAmmo)) {
-    if (tryStartReload(weaponId, state)) return { shotsFired: 0 };
-    return { shotsFired: 0 };
+    if (tryStartReload(weaponId, state)) return { shotsFired: 0, fireResults: [] };
+    return { shotsFired: 0, fireResults: [] };
   }
 
   const result = fireWeapon(entity, weaponId, aimPoint, context, { chargeRatio, rng: context.rng });
   state.cooldownTimer = 1 / cfg.fireRatePerSecond;
   consumeAmmo(weaponId, state, result.ammoConsumed);
-  return { shotsFired: 1 };
+  return { shotsFired: 1, fireResults: [result] };
 }
 
 function hasAmmo(weaponId: WeaponId, state: { ammo: number }, requiredAmmo: number): boolean {
@@ -169,7 +169,8 @@ function tryStartReload(weaponId: WeaponId, state: { ammo: number; reserve: numb
   if (!canReload(weaponId, state)) return false;
 
   const cfg = WEAPON_CONFIGS[weaponId];
-  const seconds = cfg.ammo.kind === 'magazine' ? cfg.ammo.reloadSeconds : (cfg.ammo.reloadSeconds ?? 0);
+  if (cfg.ammo.kind === 'infinite') return false;
+  const seconds = cfg.ammo.reloadSeconds ?? 0;
   if (seconds <= 0) return false;
   state.reloadTimer = seconds;
   return true;

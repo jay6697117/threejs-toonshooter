@@ -73,7 +73,7 @@ function createActionMap(initial: boolean): Record<InputAction, boolean> {
 
 export class InputManager {
   private readonly canvas: HTMLCanvasElement;
-  private readonly keyBindings: Record<string, InputAction>;
+  private readonly keyBindings: Record<string, InputAction | undefined>;
 
   private readonly down = createActionMap(false);
   private readonly justPressed = createActionMap(false);

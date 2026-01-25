@@ -52,20 +52,36 @@
 - Phase 6-9（场景/模式/AI/UI）补齐（placeholder but verifiable）：
   - 10 场景 placeholder defs：`src/game/arena/sceneDefinitions.ts`
   - 场景运行时与机制：`src/game/arena/arenaManager.ts`（zones / wind / global dark / lightning / trap）
-  - 掩体扩展：`src/game/arena/cover.ts`（pushable/toggleable/blocksProjectiles/onDestroyedSpawnCover）
+  - 掩体扩展：`src/game/arena/cover.ts`（pushable/toggleable/climbable/blocksProjectiles/onDestroyedSpawnCover）
   - 调试可视化：`src/game/debug/arenaDebug.ts`（covers AABB / spawns / objectives）
   - 模式与胜负：`src/game/modes/modeManager.ts` + `src/game/modes/spawnPlayers.ts`（duel/ffa/siege/ctf、AI fill、respawn/score）
   - AI：`src/game/entities/aiController.ts` + `src/game/ai/**` + `src/game/arena/navGraph.ts`（A*、目标、投掷物占位策略）
   - UI：`src/game/ui/index.ts` + `src/game/ui/hud.ts` + `src/game/ui/menu.ts` + `src/game/ui/overlays.ts`
 
-- Phase 10（VFX/SFX）占位链路已起：
-  - Tracers：`src/game/fx/tracers.ts`
-  - Particles：`src/game/fx/particles.ts`
-  - Screen FX：`src/game/fx/screenFx.ts`
-  - Audio：`src/game/core/audio.ts` + `src/game/audio/sfxMap.ts`
+- Phase 10（VFX/SFX）反馈链补齐：
+  - Tracers：`src/game/fx/tracers.ts`（weapon styles + cap + pool）
+  - Particles：`src/game/fx/particles.ts`（explosion/smoke/fire/poison/petals + cap + pool）
+  - Screen FX：`src/game/fx/screenFx.ts`（near-miss/slowmo overlay + hit/vignette + blind blur）
+  - Audio：`src/game/core/audio.ts` + `src/game/audio/sfxMap.ts`（weapon/impact/nearMiss/slowmo）
+  - Slowmo/Hitstop（step-based timeScale）：`src/game/core/loop.ts` + `src/game/app/createSanguoShooterApp.ts`
+
+- Phase 11（Content Assets）部分接入：
+  - `public/assets.json` 增加 `sanguoShooter` 命名空间（复用 toonshooter glTF 作 placeholder）
+  - per-scene preload groups：`src/game/arena/sceneDefinitions.ts` + `src/game/arena/arenaManager.ts`
+  - 角色 glTF placeholder 替换：`src/game/modes/spawnPlayers.ts`
+
+- Phase 11（Content Assets）补齐：
+  - 角色骨骼与动画共享：`src/game/fx/characterAnimations.ts` + `src/game/app/createSanguoShooterApp.ts`（step-based 更新）
+  - 场景资产替换与碰撞校准：`src/game/arena/sceneDefinitions.ts`（cover 绑定 env glTF）+ `src/game/arena/arenaManager.ts`（异步替换 + `updateCoverAabb`）
+
+- Phase 12（验证/回归/性能）补齐：
+  - seedable RNG：`src/game/core/rng.ts` + 全局替换 `Math.random`（除纯视觉 shake）
+  - record/replay：`src/game/replay/replay.ts` + `src/game/core/stepInput.ts`
+  - 单测：`test/*.test.ts`（通过 `node --test --import tsx`）
+  - perf budget：对象池/上限/卸载释放：`src/game/fx/*` + `src/game/core/dispose.ts` + `src/game/arena/arenaManager.ts` + `src/game/entities/aiController.ts`
+  - projectile mesh pool：`src/game/weapons/projectile.ts`（`acquire/release/dispose`）+ `src/game/weapons/fireWeapon.ts` + `src/game/app/createSanguoShooterApp.ts`
+  - weapons wall（smoke）：`/sanguo-shooter/?weaponsWall=1`
+  - Vercel smoke checklist：`docs/plans/2026-01-25-sanguo-shooter-implementation-plan.md`
 
 ## 未完成项（待推进）
-- Phase 6：`climbable` 与 per-scene preload groups
-- Phase 10：near-miss/slowmo/更多粒子与音频事件覆盖
-- Phase 11：`public/assets.json` 的 `sanguoShooter` 命名空间与资产替换策略
-- Phase 12：seedable RNG + record/replay + `node --test` + perf budget
+- 无（清单项已全部勾选）

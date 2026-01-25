@@ -46,6 +46,20 @@ export class Assets {
     return this.manifest.assets?.[namespace]?.[category]?.[key] ?? null;
   }
 
+  async preload(namespace: string, category: string, keys: string[], options?: { manifestUrl?: string }): Promise<void> {
+    try {
+      await this.loadManifest(options?.manifestUrl);
+    } catch {
+      return;
+    }
+
+    const paths = keys
+      .map((key) => this.getManifestPath(namespace, category, key))
+      .filter((p): p is string => typeof p === 'string' && p.length > 0);
+
+    await Promise.all(paths.map((path) => this.loadGltf(path).catch(() => null)));
+  }
+
   loadGltf(path: string): Promise<LoadedGltf> {
     const cached = this.gltfCache.get(path);
     if (cached) return cached;
@@ -85,4 +99,3 @@ export class Assets {
     return mesh;
   }
 }
-

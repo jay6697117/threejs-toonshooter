@@ -11,9 +11,11 @@ export type ArenaCoverDef = {
   id: string;
   size: THREE.Vector3;
   pos: THREE.Vector3;
+  gltf?: ArenaGltfAssetRef;
   color?: number;
   hp?: number;
   pushable?: boolean;
+  climbable?: boolean;
   toggleable?: boolean;
   blocksProjectiles?: boolean;
   burnable?: boolean;
@@ -34,6 +36,20 @@ export type ArenaCoverDef = {
   };
 };
 
+export type ArenaGltfAssetRef = {
+  namespace: string;
+  category: string;
+  key: string;
+  rotationY?: number;
+  offset?: THREE.Vector3;
+};
+
+export type ArenaPreloadGroup = {
+  namespace: string;
+  category: string;
+  keys: string[];
+};
+
 export type ArenaPickupDef =
   | { kind: 'weapon'; id: string; weaponId: WeaponId; pos: THREE.Vector3 }
   | { kind: 'throwable'; id: string; throwableId: ThrowableId; pos: THREE.Vector3; count?: number }
@@ -50,6 +66,7 @@ export type ArenaSceneDef = {
   supportedModes: ModeId[];
   bounds: ArenaBounds;
   groundColor: number;
+  preload?: ArenaPreloadGroup[];
   ffaSpawns: THREE.Vector3[];
   redSpawns: THREE.Vector3[];
   blueSpawns: THREE.Vector3[];
@@ -78,6 +95,14 @@ function spawnRing(bounds: ArenaBounds, y: number): THREE.Vector3[] {
   ];
 }
 
+function envPreload(keys: string[]): ArenaPreloadGroup[] {
+  return [{ namespace: 'sanguoShooter', category: 'environment', keys }];
+}
+
+function envRef(key: string, options?: { rotationY?: number; offset?: THREE.Vector3 }): ArenaGltfAssetRef {
+  return { namespace: 'sanguoShooter', category: 'environment', key, rotationY: options?.rotationY, offset: options?.offset };
+}
+
 export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
   trainingGround: {
     id: 'trainingGround',
@@ -85,19 +110,21 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x263143,
+    preload: envPreload(['Container_Long', 'SackTrench', 'Crate', 'Pallet', 'Fence_Long']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-10, 0.95, -4), v(-10, 0.95, 4), v(-8, 0.95, 0)],
     blueSpawns: [v(10, 0.95, -4), v(10, 0.95, 4), v(8, 0.95, 0)],
     covers: [
-      { id: 'tg_stage', size: new THREE.Vector3(3.2, 1.0, 2.0), pos: v(0, 0.5, 0), color: 0x6f7a86, hp: 9999 },
-      { id: 'tg_tent_a', size: new THREE.Vector3(2.2, 1.2, 1.4), pos: v(-5.5, 0.6, -3.2), color: 0x4b5563, hp: 9999 },
-      { id: 'tg_tent_b', size: new THREE.Vector3(2.0, 1.2, 1.2), pos: v(5.5, 0.6, 3.2), color: 0x4b5563, hp: 9999 },
+      { id: 'tg_stage', size: new THREE.Vector3(3.2, 1.0, 2.0), pos: v(0, 0.5, 0), color: 0x6f7a86, hp: 9999, climbable: true, gltf: envRef('Container_Long') },
+      { id: 'tg_tent_a', size: new THREE.Vector3(2.2, 1.2, 1.4), pos: v(-5.5, 0.6, -3.2), color: 0x4b5563, hp: 9999, gltf: envRef('SackTrench') },
+      { id: 'tg_tent_b', size: new THREE.Vector3(2.0, 1.2, 1.2), pos: v(5.5, 0.6, 3.2), color: 0x4b5563, hp: 9999, gltf: envRef('Crate') },
       {
         id: 'tg_hay_a',
         size: new THREE.Vector3(1.4, 0.9, 1.0),
         pos: v(-2.2, 0.45, 4.6),
         color: 0xd9b66f,
         hp: 30,
+        gltf: envRef('Pallet'),
         burnable: true,
         burnSeconds: 6,
         burnRadiusMeters: 3,
@@ -120,18 +147,21 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x2b2a2c,
+    preload: envPreload(['Barrier_Large', 'Barrier_Fixed', 'Fence_Long', 'Tree_2', 'Fence']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-11, 0.95, -3), v(-11, 0.95, 3), v(-9, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -3), v(11, 0.95, 3), v(9, 0.95, 0)],
     covers: [
-      { id: 'cb_rock_a', size: new THREE.Vector3(2.8, 1.4, 2.0), pos: v(-4.6, 0.7, 0), color: 0x6b7280, hp: 9999 },
-      { id: 'cb_rock_b', size: new THREE.Vector3(2.6, 1.3, 2.2), pos: v(4.6, 0.65, 0), color: 0x6b7280, hp: 9999 },
+      { id: 'cb_rock_a', size: new THREE.Vector3(2.8, 1.4, 2.0), pos: v(-4.6, 0.7, 0), color: 0x6b7280, hp: 9999, gltf: envRef('Barrier_Large') },
+      { id: 'cb_rock_b', size: new THREE.Vector3(2.6, 1.3, 2.2), pos: v(4.6, 0.65, 0), color: 0x6b7280, hp: 9999, gltf: envRef('Barrier_Fixed') },
       {
         id: 'cb_bridge',
         size: new THREE.Vector3(1.6, 0.9, 4.0),
         pos: v(0, 0.45, 0),
         color: 0x8b5a2b,
         hp: 50,
+        climbable: true,
+        gltf: envRef('Fence_Long'),
         onDestroyedSpawnCover: { size: new THREE.Vector3(2.4, 1.1, 4.6), hp: 9999, color: 0x6b7280 }
       },
       {
@@ -140,6 +170,7 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
         pos: v(0, 0.7, 6.2),
         color: 0x2f4f2f,
         hp: 20,
+        gltf: envRef('Tree_2'),
         onDestroyedSpawnCover: { size: new THREE.Vector3(4.2, 0.7, 0.9), hp: 9999, color: 0x8b5a2b, timeLeftSeconds: 7 }
       }
     ],
@@ -158,21 +189,23 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x111827,
+    preload: envPreload(['BrickWall_1', 'Crate', 'Pipes', 'Debris_BrokenCar', 'TrafficCone']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-11, 0.95, -4), v(-11, 0.95, 4), v(-9, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -4), v(11, 0.95, 4), v(9, 0.95, 0)],
     covers: [
-      { id: 'ly_wall_a', size: new THREE.Vector3(5.0, 1.2, 0.7), pos: v(0, 0.6, -2.8), color: 0x374151, hp: 9999 },
-      { id: 'ly_wall_b', size: new THREE.Vector3(5.0, 1.2, 0.7), pos: v(0, 0.6, 2.8), color: 0x374151, hp: 9999 },
+      { id: 'ly_wall_a', size: new THREE.Vector3(5.0, 1.2, 0.7), pos: v(0, 0.6, -2.8), color: 0x374151, hp: 9999, gltf: envRef('BrickWall_1') },
+      { id: 'ly_wall_b', size: new THREE.Vector3(5.0, 1.2, 0.7), pos: v(0, 0.6, 2.8), color: 0x374151, hp: 9999, gltf: envRef('BrickWall_1') },
       {
         id: 'ly_jar_a',
         size: new THREE.Vector3(1.0, 0.9, 1.0),
         pos: v(-4.8, 0.45, 0),
         color: 0x9ca3af,
         hp: 25,
+        gltf: envRef('Crate'),
         onDestroyedExplosion: { radiusMeters: 3.2, damage: 10, statusEffects: [{ id: 'slow', durationSeconds: 2.0 }] }
       },
-      { id: 'ly_cart', size: new THREE.Vector3(2.2, 1.0, 1.2), pos: v(4.8, 0.5, 0), color: 0x8b5a2b, hp: 60, pushable: true }
+      { id: 'ly_cart', size: new THREE.Vector3(2.2, 1.0, 1.2), pos: v(4.8, 0.5, 0), color: 0x8b5a2b, hp: 60, pushable: true, gltf: envRef('Pipes') }
     ],
     pickups: [
       { kind: 'weapon', id: 'ly_weapon', weaponId: 'repeatingCrossbow', pos: v(0, 0.2, 0) },
@@ -189,6 +222,7 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x0b1220,
+    preload: envPreload(['GasTank', 'GasCan', 'Pallet']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-11, 0.95, -3), v(-11, 0.95, 3), v(-8, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -3), v(11, 0.95, 3), v(8, 0.95, 0)],
@@ -199,6 +233,7 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
         pos: v(-4.2, 0.5, -3.2),
         color: 0x6b7280,
         hp: 30,
+        gltf: envRef('GasTank'),
         burnable: true,
         burnSeconds: 8,
         burnRadiusMeters: 4.2,
@@ -211,6 +246,7 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
         pos: v(4.2, 0.5, 3.2),
         color: 0x6b7280,
         hp: 30,
+        gltf: envRef('GasCan'),
         burnable: true,
         burnSeconds: 8,
         burnRadiusMeters: 4.2,
@@ -231,13 +267,14 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x2a2420,
+    preload: envPreload(['MetalFence', 'Barrier_Large', 'Container_Long']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-11, 0.95, -4), v(-11, 0.95, 4), v(-9, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -4), v(11, 0.95, 4), v(9, 0.95, 0)],
     covers: [
-      { id: 'hp_gate', size: new THREE.Vector3(1.8, 1.6, 0.6), pos: v(0, 0.8, 0), color: 0x6b4f2a, hp: 80, toggleable: true },
-      { id: 'hp_wall_a', size: new THREE.Vector3(3.6, 1.2, 0.7), pos: v(-4.2, 0.6, 0), color: 0x4b5563, hp: 9999 },
-      { id: 'hp_wall_b', size: new THREE.Vector3(3.6, 1.2, 0.7), pos: v(4.2, 0.6, 0), color: 0x4b5563, hp: 9999 }
+      { id: 'hp_gate', size: new THREE.Vector3(1.8, 1.6, 0.6), pos: v(0, 0.8, 0), color: 0x6b4f2a, hp: 80, toggleable: true, gltf: envRef('MetalFence') },
+      { id: 'hp_wall_a', size: new THREE.Vector3(3.6, 1.2, 0.7), pos: v(-4.2, 0.6, 0), color: 0x4b5563, hp: 9999, climbable: true, gltf: envRef('Barrier_Large') },
+      { id: 'hp_wall_b', size: new THREE.Vector3(3.6, 1.2, 0.7), pos: v(4.2, 0.6, 0), color: 0x4b5563, hp: 9999, climbable: true, gltf: envRef('Barrier_Large') }
     ],
     pickups: [{ kind: 'throwable', id: 'hp_throw', throwableId: 'bearTrap', pos: v(0, 0.2, -6) }],
     objectives: {
@@ -251,17 +288,19 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x1b2b22,
+    preload: envPreload(['Barrier_Large', 'Container_Long', 'Tree_3', 'Sofa']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-11, 0.95, -4), v(-11, 0.95, 4), v(-9, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -4), v(11, 0.95, 4), v(9, 0.95, 0)],
     covers: [
-      { id: 'pg_rock_a', size: new THREE.Vector3(2.4, 1.1, 1.8), pos: v(-4.5, 0.55, -1.5), color: 0x6b7280, hp: 9999 },
+      { id: 'pg_rock_a', size: new THREE.Vector3(2.4, 1.1, 1.8), pos: v(-4.5, 0.55, -1.5), color: 0x6b7280, hp: 9999, gltf: envRef('Barrier_Large') },
       {
         id: 'pg_hut',
         size: new THREE.Vector3(2.6, 1.4, 2.2),
         pos: v(4.5, 0.7, 1.5),
         color: 0x8b5a2b,
         hp: 35,
+        gltf: envRef('Container_Long'),
         burnable: true,
         burnSeconds: 6,
         burnRadiusMeters: 3.4,
@@ -281,14 +320,15 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x1a1b23,
+    preload: envPreload(['BrickWall_1', 'Barrier_Fixed', 'MetalFence', 'StreetLight']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-11, 0.95, -4), v(-11, 0.95, 4), v(-9, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -4), v(11, 0.95, 4), v(9, 0.95, 0)],
     covers: [
-      { id: 'tq_wall_a', size: new THREE.Vector3(6.0, 1.2, 0.7), pos: v(0, 0.6, 0), color: 0x374151, hp: 9999 },
-      { id: 'tq_pillar_a', size: new THREE.Vector3(1.0, 1.6, 1.0), pos: v(-6.2, 0.8, -3.2), color: 0x6b7280, hp: 9999 },
-      { id: 'tq_pillar_b', size: new THREE.Vector3(1.0, 1.6, 1.0), pos: v(6.2, 0.8, 3.2), color: 0x6b7280, hp: 9999 },
-      { id: 'tq_screen', size: new THREE.Vector3(2.8, 1.2, 0.25), pos: v(0, 0.6, 4.0), color: 0x9aa5b4, hp: 9999, blocksProjectiles: false }
+      { id: 'tq_wall_a', size: new THREE.Vector3(6.0, 1.2, 0.7), pos: v(0, 0.6, 0), color: 0x374151, hp: 9999, climbable: true, gltf: envRef('BrickWall_1') },
+      { id: 'tq_pillar_a', size: new THREE.Vector3(1.0, 1.6, 1.0), pos: v(-6.2, 0.8, -3.2), color: 0x6b7280, hp: 9999, gltf: envRef('Barrier_Fixed') },
+      { id: 'tq_pillar_b', size: new THREE.Vector3(1.0, 1.6, 1.0), pos: v(6.2, 0.8, 3.2), color: 0x6b7280, hp: 9999, gltf: envRef('Barrier_Fixed') },
+      { id: 'tq_screen', size: new THREE.Vector3(2.8, 1.2, 0.25), pos: v(0, 0.6, 4.0), color: 0x9aa5b4, hp: 9999, blocksProjectiles: false, gltf: envRef('MetalFence') }
     ],
     pickups: [{ kind: 'weapon', id: 'tq_weapon', weaponId: 'poisonCrossbow', pos: v(0, 0.2, -6) }],
     zones: [
@@ -306,12 +346,13 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x202423,
+    preload: envPreload(['SackTrench', 'Pipes']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-11, 0.95, -4), v(-11, 0.95, 4), v(-9, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -4), v(11, 0.95, 4), v(9, 0.95, 0)],
     covers: [
-      { id: 'wz_tent_a', size: new THREE.Vector3(2.4, 1.1, 1.6), pos: v(-4.8, 0.55, 0), color: 0x4b5563, hp: 9999 },
-      { id: 'wz_tent_b', size: new THREE.Vector3(2.4, 1.1, 1.6), pos: v(4.8, 0.55, 0), color: 0x4b5563, hp: 9999 }
+      { id: 'wz_tent_a', size: new THREE.Vector3(2.4, 1.1, 1.6), pos: v(-4.8, 0.55, 0), color: 0x4b5563, hp: 9999, gltf: envRef('SackTrench') },
+      { id: 'wz_tent_b', size: new THREE.Vector3(2.4, 1.1, 1.6), pos: v(4.8, 0.55, 0), color: 0x4b5563, hp: 9999, gltf: envRef('SackTrench') }
     ],
     pickups: [{ kind: 'weapon', id: 'wz_weapon', weaponId: 'strongBow', pos: v(0, 0.2, 0) }],
     objectives: {
@@ -325,12 +366,13 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x1f2937,
+    preload: envPreload(['BrickWall_1', 'MetalFence', 'GasTank']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-11, 0.95, -4), v(-11, 0.95, 4), v(-9, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -4), v(11, 0.95, 4), v(9, 0.95, 0)],
     covers: [
-      { id: 'bd_wall_a', size: new THREE.Vector3(4.0, 1.2, 0.7), pos: v(-3.8, 0.6, 0), color: 0x4b5563, hp: 9999 },
-      { id: 'bd_wall_b', size: new THREE.Vector3(4.0, 1.2, 0.7), pos: v(3.8, 0.6, 0), color: 0x4b5563, hp: 9999 }
+      { id: 'bd_wall_a', size: new THREE.Vector3(4.0, 1.2, 0.7), pos: v(-3.8, 0.6, 0), color: 0x4b5563, hp: 9999, climbable: true, gltf: envRef('BrickWall_1') },
+      { id: 'bd_wall_b', size: new THREE.Vector3(4.0, 1.2, 0.7), pos: v(3.8, 0.6, 0), color: 0x4b5563, hp: 9999, climbable: true, gltf: envRef('BrickWall_1') }
     ],
     pickups: [{ kind: 'throwable', id: 'bd_throw', throwableId: 'thunderGrenade', pos: v(0, 0.2, -6) }],
     objectives: {
@@ -344,18 +386,20 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     supportedModes: ['duel', 'ffa', 'siege', 'ctf'],
     bounds: BASE_BOUNDS,
     groundColor: 0x2b2f36,
+    preload: envPreload(['Barrier_Fixed', 'TrafficCone', 'Crate']),
     ffaSpawns: spawnRing(BASE_BOUNDS, 0.95),
     redSpawns: [v(-11, 0.95, -4), v(-11, 0.95, 4), v(-9, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -4), v(11, 0.95, 4), v(9, 0.95, 0)],
     covers: [
-      { id: 'xa_pillar_a', size: new THREE.Vector3(1.1, 1.2, 1.1), pos: v(-6.0, 0.6, 0), color: 0x6b7280, hp: 9999 },
-      { id: 'xa_pillar_b', size: new THREE.Vector3(1.1, 1.2, 1.1), pos: v(6.0, 0.6, 0), color: 0x6b7280, hp: 9999 },
+      { id: 'xa_pillar_a', size: new THREE.Vector3(1.1, 1.2, 1.1), pos: v(-6.0, 0.6, 0), color: 0x6b7280, hp: 9999, gltf: envRef('Barrier_Fixed') },
+      { id: 'xa_pillar_b', size: new THREE.Vector3(1.1, 1.2, 1.1), pos: v(6.0, 0.6, 0), color: 0x6b7280, hp: 9999, gltf: envRef('Barrier_Fixed') },
       {
         id: 'xa_gong',
         size: new THREE.Vector3(1.2, 1.0, 0.6),
         pos: v(0, 0.5, -6.8),
         color: 0xffd166,
         hp: 25,
+        gltf: envRef('TrafficCone'),
         onDestroyedExplosion: { radiusMeters: 3.0, damage: 0, statusEffects: [{ id: 'blind', durationSeconds: 3.0 }] }
       }
     ],

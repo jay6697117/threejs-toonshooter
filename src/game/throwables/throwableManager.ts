@@ -5,6 +5,7 @@ import { applyStatus, hasStatus } from '../combat/statusEffects';
 import { THROWABLE_CONFIGS } from '../config/throwables';
 import type { ThrowableId } from '../config/ids';
 import type { Rng } from '../core/rng';
+import { disposeObject3D } from '../core/dispose';
 import type { Entity } from '../entities/entityBase';
 import type { AreaEffect, SmokeVolume, ThrowableProjectile, TrapInstance } from './types';
 
@@ -16,7 +17,15 @@ export type ThrowablesWorld = {
   areas: AreaEffect[];
   traps: TrapInstance[];
   rng: Rng;
+  emitFx?: (event: ThrowablesFxEvent) => void;
 };
+
+export type ThrowablesFxEvent =
+  | { type: 'explosion'; throwableId: ThrowableId; pos: THREE.Vector3; radius: number }
+  | { type: 'smoke'; throwableId: ThrowableId; pos: THREE.Vector3; radius: number; smokeType: 'normal' | 'poison' }
+  | { type: 'area'; throwableId: ThrowableId; pos: THREE.Vector3; radius: number }
+  | { type: 'areaIgnite'; throwableId: ThrowableId; pos: THREE.Vector3; radius: number }
+  | { type: 'trapTrigger'; throwableId: ThrowableId; pos: THREE.Vector3 };
 
 const GRAVITY = -18;
 const GROUND_Y = 0.05;
@@ -143,6 +152,7 @@ function updateThrowableProjectiles(world: ThrowablesWorld, dt: number): void {
       if (p.position.y <= GROUND_Y + 1e-3) {
         spawnArea(world, p.throwableId, resolveOwner(world, p.ownerId), p.position);
         world.scene.remove(p.mesh);
+        disposeObject3D(p.mesh);
         continue;
       }
       remaining.push(p);
@@ -167,6 +177,7 @@ function updateThrowableProjectiles(world: ThrowablesWorld, dt: number): void {
     }
 
     world.scene.remove(p.mesh);
+    disposeObject3D(p.mesh);
   }
 
   world.throwableProjectiles = remaining;
@@ -194,6 +205,7 @@ function spawnSmoke(world: ThrowablesWorld, throwableId: ThrowableId, owner: Ent
   };
 
   world.smokes.push(smoke);
+  world.emitFx?.({ type: 'smoke', throwableId, pos: pos.clone(), radius: cfg.effect.radiusMeters, smokeType: cfg.effect.smokeType });
 }
 
 function updateSmokeVolumes(world: ThrowablesWorld, dt: number, timeSeconds: number): void {
@@ -203,6 +215,7 @@ function updateSmokeVolumes(world: ThrowablesWorld, dt: number, timeSeconds: num
     s.timeLeft -= dt;
     if (s.timeLeft <= 0) {
       world.scene.remove(s.mesh);
+      disposeObject3D(s.mesh);
       continue;
     }
 
@@ -255,6 +268,7 @@ function spawnArea(world: ThrowablesWorld, throwableId: ThrowableId, owner: Enti
   };
 
   world.areas.push(area);
+  world.emitFx?.({ type: 'area', throwableId, pos: pos.clone(), radius: cfg.effect.radiusMeters });
 }
 
 function updateAreas(world: ThrowablesWorld, dt: number, timeSeconds: number): void {
@@ -264,6 +278,7 @@ function updateAreas(world: ThrowablesWorld, dt: number, timeSeconds: number): v
     a.timeLeft -= dt;
     if (a.timeLeft <= 0) {
       world.scene.remove(a.mesh);
+      disposeObject3D(a.mesh);
       continue;
     }
 
@@ -276,6 +291,7 @@ function updateAreas(world: ThrowablesWorld, dt: number, timeSeconds: number): v
     }
 
     if (a.ignitable && !a.ignited) {
+      const wasIgnited = Boolean(a.ignited);
       for (const entity of world.entities) {
         if (entity.eliminated) continue;
         const dist = entity.position.distanceTo(a.position);
@@ -284,6 +300,9 @@ function updateAreas(world: ThrowablesWorld, dt: number, timeSeconds: number): v
           a.ignited = true;
           break;
         }
+      }
+      if (!wasIgnited && a.ignited) {
+        world.emitFx?.({ type: 'areaIgnite', throwableId: a.throwableId, pos: a.position.clone(), radius: a.radius });
       }
     }
 
@@ -346,6 +365,7 @@ function updateTraps(world: ThrowablesWorld, dt: number, timeSeconds: number): v
       t.timeLeft -= dt;
       if (t.timeLeft <= 0) {
         world.scene.remove(t.mesh);
+        disposeObject3D(t.mesh);
         continue;
       }
     }
@@ -370,7 +390,9 @@ function updateTraps(world: ThrowablesWorld, dt: number, timeSeconds: number): v
     }
 
     if (triggered) {
+      world.emitFx?.({ type: 'trapTrigger', throwableId: t.throwableId, pos: t.position.clone() });
       world.scene.remove(t.mesh);
+      disposeObject3D(t.mesh);
       continue;
     }
 
@@ -408,6 +430,7 @@ function explode(world: ThrowablesWorld, throwableId: ThrowableId, owner: Entity
     knockbackDistance,
     statusEffects: statusEffects.length > 0 ? statusEffects : undefined
   });
+  world.emitFx?.({ type: 'explosion', throwableId, pos: pos.clone(), radius: cfg.effect.radiusMeters });
 }
 
 function resolveOwner(world: ThrowablesWorld, ownerId: string): Entity {

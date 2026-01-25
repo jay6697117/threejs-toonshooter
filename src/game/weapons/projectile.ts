@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { WeaponId } from '../config/ids';
+import { WEAPON_CONFIGS } from '../config/weapons';
 import type { Cover } from '../arena/cover';
 import type { Entity, TeamId } from '../entities/entityBase';
 
@@ -40,8 +41,41 @@ export type ProjectileUpdateResult = {
   remove: boolean;
 };
 
+type ProjectileEntityHit = Extract<ProjectileHit, { type: 'entity' }>;
+type ProjectileCoverHit = Extract<ProjectileHit, { type: 'cover' }>;
+
 const GRAVITY = -18;
 const GROUND_Y = 0.05;
+const PROJECTILE_MESH_POOL_CAP = 96;
+const projectileMeshPool: THREE.Mesh[] = [];
+
+export function acquireProjectileMesh(weaponId: WeaponId): THREE.Object3D {
+  const mesh = projectileMeshPool.pop() ?? createProjectileMesh(weaponId);
+  applyProjectileMeshStyle(mesh, weaponId);
+  mesh.visible = true;
+  return mesh;
+}
+
+export function releaseProjectileMesh(mesh: THREE.Object3D): void {
+  const asMesh = mesh as THREE.Mesh;
+  if (!asMesh || !(asMesh as unknown as { isMesh?: boolean }).isMesh) return;
+
+  asMesh.visible = false;
+
+  if (projectileMeshPool.length < PROJECTILE_MESH_POOL_CAP) {
+    projectileMeshPool.push(asMesh);
+    return;
+  }
+
+  disposeProjectileMesh(asMesh);
+}
+
+export function disposeProjectileMeshPool(): void {
+  for (const mesh of projectileMeshPool) {
+    disposeProjectileMesh(mesh);
+  }
+  projectileMeshPool.length = 0;
+}
 
 export function updateProjectiles(projectiles: Projectile[], entities: Entity[], covers: Cover[], dt: number): ProjectileUpdateResult[] {
   const results: ProjectileUpdateResult[] = [];
@@ -154,6 +188,59 @@ export function updateProjectiles(projectiles: Projectile[], entities: Entity[],
   return results;
 }
 
+function createProjectileMesh(weaponId: WeaponId): THREE.Mesh {
+  const color = resolveProjectileColor(weaponId);
+  const geo = new THREE.SphereGeometry(0.12, 12, 12);
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.2, emissive: new THREE.Color(color), emissiveIntensity: 0.25 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  return mesh;
+}
+
+function applyProjectileMeshStyle(mesh: THREE.Mesh, weaponId: WeaponId): void {
+  const color = resolveProjectileColor(weaponId);
+  const mat = mesh.material;
+
+  if (Array.isArray(mat)) {
+    for (const m of mat) {
+      if ((m as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+        const ms = m as THREE.MeshStandardMaterial;
+        ms.color.setHex(color);
+        ms.emissive.setHex(color);
+        ms.emissiveIntensity = Math.max(ms.emissiveIntensity, 0.25);
+      }
+    }
+  } else if ((mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+    const ms = mat as THREE.MeshStandardMaterial;
+    ms.color.setHex(color);
+    ms.emissive.setHex(color);
+    ms.emissiveIntensity = Math.max(ms.emissiveIntensity, 0.25);
+  }
+}
+
+function disposeProjectileMesh(mesh: THREE.Mesh): void {
+  mesh.removeFromParent();
+
+  if (mesh.geometry) {
+    mesh.geometry.dispose();
+  }
+
+  const mat = mesh.material;
+  if (Array.isArray(mat)) {
+    for (const m of mat) m.dispose();
+  } else {
+    mat.dispose();
+  }
+}
+
+function resolveProjectileColor(weaponId: WeaponId): number {
+  const cfg = WEAPON_CONFIGS[weaponId];
+  if (cfg.category === 'melee') return 0xbcc6d8;
+  if (cfg.category === 'mid') return 0x79d5ff;
+  if (cfg.category === 'ranged') return 0xffc44d;
+  return 0xff6b6b;
+}
+
 function updateReturning(p: Projectile, entities: Entity[]): void {
   if (!p.origin || p.maxDistance === undefined) return;
   if (!p.returningToAttacker) {
@@ -175,7 +262,7 @@ function updateReturning(p: Projectile, entities: Entity[]): void {
   p.velocity.copy(dir).multiplyScalar(p.speed);
 }
 
-function hitEntities(p: Projectile, entities: Entity[]): ProjectileHit | null {
+function hitEntities(p: Projectile, entities: Entity[]): ProjectileEntityHit | null {
   for (const e of entities) {
     if (e.eliminated) continue;
     if (e.team === p.attackerTeam) continue;
@@ -191,7 +278,7 @@ function hitEntities(p: Projectile, entities: Entity[]): ProjectileHit | null {
   return null;
 }
 
-function hitCovers(p: Projectile, covers: Cover[]): ProjectileHit | null {
+function hitCovers(p: Projectile, covers: Cover[]): ProjectileCoverHit | null {
   for (const c of covers) {
     if (!c.active) continue;
     if (c.blocksProjectiles === false) continue;

@@ -28,6 +28,7 @@ export type Cover = {
   hp: number;
   maxHp: number;
   pushable?: boolean;
+  climbable?: boolean;
   toggleable?: boolean;
   blocksProjectiles?: boolean;
   burnable?: boolean;
@@ -67,6 +68,7 @@ export function createBoxCover(options: {
     hp,
     maxHp: hp,
     pushable: false,
+    climbable: false,
     toggleable: false,
     blocksProjectiles: true,
     burnable: false,

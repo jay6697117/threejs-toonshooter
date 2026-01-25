@@ -266,7 +266,7 @@ npm run preview
 - [x] `weapons/projectile.ts`：直线/抛物线/弹跳（基础）
 - [x] `weapons/projectile.ts`：返回（用于 `boomerangBlade`）
 - [x] `weapons/projectile.ts`：grapple（用于 `grapplingHook`）
-- [ ] `weapons/projectile.ts`：对象池化（后续性能阶段）
+- [x] `weapons/projectile.ts`：对象池化（mesh pool：`acquireProjectileMesh` / `releaseProjectileMesh` / `disposeProjectileMeshPool`）
 - [x] `combat/areaDamage.ts`：AOE + falloff + friendly-fire multiplier（可配）
 - [x] `combat/damage.ts`：伤害结算 + difficulty tuning
 - [x] `combat/statusEffects.ts`：Core 8 + `root/knockdown`
@@ -284,13 +284,20 @@ npm run preview
 **Checklist（强制按类别逐把验收）：**
 - [x] `weapons/weaponManager.ts`：weapon slots + switching + reload + charge states
 - [x] `config/weapons.ts`：15 weapons config（严格按 `weaponId`）
-- [ ] 逐把实现（每把都要有 smoke 用例）：
+- [x] 逐把实现（每把都要有 smoke 用例）：
   - [x] melee（first playable pass）: `flyingKnife` `flyingDart` `sleeveArrow` `boomerangBlade`
   - [x] mid（first playable pass）: `huntingBow` `repeatingCrossbow` `fireArrow` `ironMace`
   - [x] ranged（first playable pass）: `strongBow` `heavyCrossbow` `siegeCrossbow` `poisonCrossbow`
   - [x] special（first playable pass）: `zhugeRepeater` `grapplingHook` `thunderBomb`
-  - [ ] per-weapon smoke checklist（ammo/reload/charge/special + edge cases）
+  - [x] per-weapon smoke checklist（ammo/reload/charge/special + edge cases；见下方“验收步骤”）
   - [x] special acquisition gating（airdrop/treasure only；当前以 timed airdrop 为主，treasure 可后补）
+
+**Per-Weapon Smoke Checklist（验收步骤）**
+- 入口：访问 `/sanguo-shooter/?weaponsWall=1`，在场地北侧自动生成 15 把武器拾取墙（便于逐把验收）。
+- 通用用例：`pickup -> fire -> reload -> swap slots -> drop/replace -> re-pickup`，同时观察 HUD（ammo/reload/charge）与 VFX/SFX（tracer/impact）。
+- 充能用例：对 `cfg.charge` 武器执行 `hold -> release`，覆盖 `minSeconds`/`maxSeconds`/`requiredFullCharge` 三种门禁。
+- 特殊机制：覆盖 `doubleShot`/`penetrate`/`burstAll`/`spawnObstacleOnImpact`/`mobilityGrapple`/`bouncyExplosion`/`splash` 的可触发路径（命中 entity/cover/timeout/ground）。
+- 边界用例：`0 ammo -> auto reload`、`reserve=0 -> dry fire`、`pause/unpause`、`hitstop/slowmo`、`ctf carrier restricted`。
 
 **Done Criteria：**
 - 15 把武器“数值、弹药、换弹、蓄力、状态效果、特殊机制”都可跑通。
@@ -320,8 +327,8 @@ npm run preview
 
 **Checklist：**
 - [x] `arena/arenaManager.ts`：load/unload（`clearArena`）+ scene events/zones（placeholder 机制）
-- [ ] `arena/arenaManager.ts`：per-scene preload groups（assets integration，placeholder-first）
-- [ ] `arena/cover.ts`：destructible/burnable/pushable/climbable/toggleable（climbable 仍待补齐）
+- [x] `arena/arenaManager.ts`：per-scene preload groups（assets integration，placeholder-first）
+- [x] `arena/cover.ts`：destructible/burnable/pushable/climbable/toggleable
 - [x] `arena/sceneDefinitions.ts`：10 scene defs（spawn points, cover placements, events）
 - [x] `debug/arenaDebug.ts`：展示 AABB、spawn、objectives
 
@@ -369,10 +376,10 @@ npm run preview
 **目标：** “命中反馈”闭环：视觉 + 声音 + 镜头 + UI 提示一致且可配置强度。
 
 **Checklist：**
-- [ ] `fx/tracers.ts`：weapon-specific tracer styles
-- [ ] `fx/particles.ts`：explosion/smoke/fire/poison/petals
-- [ ] `fx/screenFx.ts`：hit flash/vignette/near-miss/slowmo/shake/blind blur
-- [ ] `core/audio.ts` + `audio/sfxMap.ts`：weapon/impact/ambient
+- [x] `fx/tracers.ts`：weapon-specific tracer styles
+- [x] `fx/particles.ts`：explosion/smoke/fire/poison/petals
+- [x] `fx/screenFx.ts`：hit flash/vignette/near-miss/slowmo/shake/blind blur
+- [x] `core/audio.ts` + `audio/sfxMap.ts`：weapon/impact/ambient
 
 ---
 
@@ -381,9 +388,9 @@ npm run preview
 **目标：** placeholder 替换为最终 glTF/贴图，同时保持碰撞与 gameplay 不回归。
 
 **Checklist：**
-- [ ] `public/assets.json` 扩展 `sanguoShooter` 命名空间
-- [ ] 角色骨骼与动画共享（12 皮肤 + 1 套动画）
-- [ ] 场景资产与碰撞盒校准
+- [x] `public/assets.json` 扩展 `sanguoShooter` 命名空间
+- [x] 角色骨骼与动画共享（12 皮肤 + 1 套动画；`fx/characterAnimations.ts` + `modes/spawnPlayers.ts` 注入 clips）
+- [x] 场景资产与碰撞盒校准（`arena/sceneDefinitions.ts` 绑定 env glTF；`arena/arenaManager.ts` 异步替换 cover mesh 并 `updateCoverAabb`）
 
 ---
 
@@ -392,10 +399,17 @@ npm run preview
 **目标：** 可复现、可回归、可持续迭代。
 
 **Checklist：**
-- [ ] seedable RNG + basic record/replay（至少记录 input + key events）
-- [ ] `node --test`：纯逻辑单测（status stacking, aoe falloff, win conditions）
-- [ ] perf budget：object pools + cap limits + AI throttling + scene unload
-- [ ] Vercel smoke checklist（路径、缓存头、资源 404）
+- [x] seedable RNG + basic record/replay（至少记录 input + key events）
+- [x] `node --test`：纯逻辑单测（status stacking, aoe falloff, win conditions）
+- [x] perf budget：object pools + cap limits + AI throttling + scene unload
+- [x] Vercel smoke checklist（路径、缓存头、资源 404；见下方）
+
+**Vercel Smoke Checklist**
+- Build：`npm run build`，确认产物输出到 `dist/`（`vercel.json.outputDirectory`）。
+- Routes（preview 或 prod 均需）：`/`、`/sanguo-shooter/`、`/toonshooter/`、`/assets.json` 均 200。
+- Assets：打开 DevTools Network，确认 `/assets/*.js`（或 `vite-assets`）为 200，且带 `Cache-Control: public,max-age=31536000,immutable`（见 `vercel.json.headers`）。
+- 404 兜底：随机访问一个不存在的资源路径（例如 `/assets/not-exist.bin`）应为 404（不应被重写到 HTML）。
+- Replay（可选）：`/sanguo-shooter/?replay=record` 结束后刷新，再用 `/sanguo-shooter/?replay=play` 可回放（localStorage）。
 
 ---
 

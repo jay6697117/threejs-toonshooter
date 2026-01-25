@@ -81,12 +81,50 @@
         "WaterTank_Platform": "assets/toonshooter/Environment/glTF/WaterTank_Platform.gltf",
         "WoodPlanks": "assets/toonshooter/Environment/glTF/WoodPlanks.gltf"
       }
+    },
+    "sanguoShooter": {
+      "characters": {
+        "liuBei": "assets/toonshooter/Characters/glTF/Character_Soldier.gltf",
+        "guanYu": "assets/toonshooter/Characters/glTF/Character_Soldier.gltf",
+        "zhangFei": "assets/toonshooter/Characters/glTF/Character_Soldier.gltf",
+        "zhugeLiang": "assets/toonshooter/Characters/glTF/Character_Hazmat.gltf",
+        "xiahouDun": "assets/toonshooter/Characters/glTF/Character_Enemy.gltf",
+        "zhangLiao": "assets/toonshooter/Characters/glTF/Character_Enemy.gltf",
+        "caoCao": "assets/toonshooter/Characters/glTF/Character_Enemy.gltf",
+        "dianWei": "assets/toonshooter/Characters/glTF/Character_Hazmat.gltf",
+        "ganNing": "assets/toonshooter/Characters/glTF/Character_Soldier.gltf",
+        "sunShangxiang": "assets/toonshooter/Characters/glTF/Character_Hazmat.gltf",
+        "zhouYu": "assets/toonshooter/Characters/glTF/Character_Soldier.gltf",
+        "taiShiCi": "assets/toonshooter/Characters/glTF/Character_Soldier.gltf"
+      },
+      "environment": {
+        "Barrier_Fixed": "assets/toonshooter/Environment/glTF/Barrier_Fixed.gltf",
+        "Barrier_Large": "assets/toonshooter/Environment/glTF/Barrier_Large.gltf",
+        "Container_Long": "assets/toonshooter/Environment/glTF/Container_Long.gltf",
+        "Crate": "assets/toonshooter/Environment/glTF/Crate.gltf",
+        "Debris_BrokenCar": "assets/toonshooter/Environment/glTF/Debris_BrokenCar.gltf",
+        "Fence": "assets/toonshooter/Environment/glTF/Fence.gltf",
+        "Fence_Long": "assets/toonshooter/Environment/glTF/Fence_Long.gltf",
+        "GasCan": "assets/toonshooter/Environment/glTF/GasCan.gltf",
+        "GasTank": "assets/toonshooter/Environment/glTF/GasTank.gltf",
+        "MetalFence": "assets/toonshooter/Environment/glTF/MetalFence.gltf",
+        "Pallet": "assets/toonshooter/Environment/glTF/Pallet.gltf",
+        "Pipes": "assets/toonshooter/Environment/glTF/Pipes.gltf",
+        "SackTrench": "assets/toonshooter/Environment/glTF/SackTrench.gltf",
+        "Sofa": "assets/toonshooter/Environment/glTF/Sofa.gltf",
+        "StreetLight": "assets/toonshooter/Environment/glTF/StreetLight.gltf",
+        "TrafficCone": "assets/toonshooter/Environment/glTF/TrafficCone.gltf",
+        "Tree_2": "assets/toonshooter/Environment/glTF/Tree_2.gltf",
+        "Tree_3": "assets/toonshooter/Environment/glTF/Tree_3.gltf",
+        "BrickWall_1": "assets/toonshooter/Environment/glTF/BrickWall_1.gltf"
+      }
     }
   },
   "summary": {
-    "total": 74,
+    "total": 105,
     "categories": {
-      "toonshooter": 74
+      "toonshooter": 74,
+      "sanguoShooter": 31
     }
   }
 }

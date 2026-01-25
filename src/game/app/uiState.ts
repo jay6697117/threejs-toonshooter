@@ -1,5 +1,6 @@
 import type { MatchState } from '../modes/modeManager';
 import type { CharacterId, ModeId, SceneId, StatusEffectId, ThrowableId, WeaponId } from '../config/ids';
+import type { DifficultyId } from '../config/difficulty';
 import type { TeamId } from '../entities/entityBase';
 
 export type UiWeaponSlotState = {
@@ -48,10 +49,16 @@ export type UiHumanState = UiEntityRow & {
 export type SanguoShooterUiState = {
   modeId: ModeId;
   sceneId: SceneId;
+  difficultyId: DifficultyId;
+  seed: number;
+  timeScale: number;
+  nearMissAmount: number;
   paused: boolean;
   scoreboardHeld: boolean;
   match: MatchState;
   timeSeconds: number;
+  stepIndex: number;
+  replay: { mode: 'none' | 'record' | 'play'; endStepIndex: number | null };
   humanId: string;
   human: UiHumanState;
   entities: UiEntityRow[];
