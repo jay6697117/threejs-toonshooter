@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { ThrowableId, WeaponId } from '../config/ids';
 import type { Entity } from '../entities/entityBase';
+import { createToonMaterial } from '../core/materialFactory';
 
 export type PickupKind = 'weapon' | 'throwable' | 'health';
 
@@ -120,13 +121,13 @@ function createPickupMesh(color: number): THREE.Object3D {
   const group = new THREE.Group();
 
   const baseGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.12, 16);
-  const baseMat = new THREE.MeshStandardMaterial({ color: 0x1b1f26, roughness: 0.9, metalness: 0.1 });
+  const baseMat = createToonMaterial({ color: 0x1b1f26 });
   const base = new THREE.Mesh(baseGeo, baseMat);
   base.receiveShadow = true;
   group.add(base);
 
   const coreGeo = new THREE.SphereGeometry(0.22, 16, 16);
-  const coreMat = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.2, emissive: new THREE.Color(color), emissiveIntensity: 0.35 });
+  const coreMat = createToonMaterial({ color, emissive: color, emissiveIntensity: 2.0 }); // High intensity for bloom
   const core = new THREE.Mesh(coreGeo, coreMat);
   core.position.y = 0.24;
   core.castShadow = true;
@@ -134,4 +135,3 @@ function createPickupMesh(color: number): THREE.Object3D {
 
   return group;
 }
-

@@ -58,7 +58,7 @@ export function createTracerSystem(scene: THREE.Scene): TracerSystem {
     const mid = from.clone().add(to).multiplyScalar(0.5);
     const pooled = pool.pop();
     const mat = pooled?.mat ?? new THREE.MeshBasicMaterial({ color: style.color, transparent: true, opacity: 0.9, depthWrite: false });
-    mat.color.setHex(style.color);
+    mat.color.setHex(style.color).multiplyScalar(1.5); // Boost for Bloom
     mat.opacity = 0.9;
 
     const mesh = pooled?.mesh ?? new THREE.Mesh(geo, mat);

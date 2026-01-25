@@ -8,6 +8,7 @@ import { applyStatus } from '../combat/statusEffects';
 import { dealDamage } from '../combat/damage';
 import type { Assets } from '../core/assets';
 import { disposeObject3D } from '../core/dispose';
+import { createToonMaterial } from '../core/materialFactory';
 
 const TRAP_CENTER = new THREE.Vector3(0, 0, 0);
 
@@ -267,7 +268,7 @@ function createGround(bounds: { minX: number; maxX: number; minZ: number; maxZ: 
   const depth = bounds.maxZ - bounds.minZ;
 
   const geo = new THREE.PlaneGeometry(width, depth);
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0.0 });
+  const mat = createToonMaterial({ color });
   const ground = new THREE.Mesh(geo, mat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.set((bounds.minX + bounds.maxX) / 2, 0, (bounds.minZ + bounds.maxZ) / 2);

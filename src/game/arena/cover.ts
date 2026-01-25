@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { computeAabbFromBox3, type Aabb2 } from '../combat/collision';
+import { createToonMaterial } from '../core/materialFactory';
 
 export type CoverId = string;
 
@@ -48,7 +49,7 @@ export function createBoxCover(options: {
   hp?: number;
 }): Cover {
   const geo = new THREE.BoxGeometry(options.size.x, options.size.y, options.size.z);
-  const mat = new THREE.MeshStandardMaterial({ color: options.color ?? 0x6f7a86, roughness: 0.9, metalness: 0.05 });
+  const mat = createToonMaterial({ color: options.color ?? 0x6f7a86 });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.copy(options.pos);
   mesh.castShadow = true;

@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createBoxCover, updateCoverAabb, type Cover } from '../arena/cover';
 import { createWeaponPickup, updatePickups } from '../arena/pickups';
 import { clearArena, loadArena, updateArena } from '../arena/arenaManager';
@@ -66,10 +70,37 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
   const audio = new AudioManager();
   audio.setVolumes(settings.audio);
 
+  // Disable default antialias as we might use post-processing (though FXAA/SMAA would be better, relying on high DPR for now)
   const renderer = createRenderer(canvas, { maxDpr: settings.graphics.maxDpr, shadows: settings.graphics.shadows });
+
+  // Post-processing setup
+  const composer = new EffectComposer(renderer);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0f1c);
+  scene.fog = new THREE.FogExp2(0x0b0f1c, 0.02); // Add atmosphere
+
+  const cameraRig = new CameraRig({
+    fov: 50,
+    near: 0.1,
+    far: 200,
+    offset: new THREE.Vector3(0, 4.2, 6.8),
+    lookAtOffset: new THREE.Vector3(0, 0.9, 0)
+  });
+  const camera = cameraRig.camera;
+
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+
+  const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+  bloomPass.threshold = 0.8; // Only very bright things glow
+  bloomPass.strength = 1.2;
+  bloomPass.radius = 0.5;
+  composer.addPass(bloomPass);
+
+  const outputPass = new OutputPass();
+  composer.addPass(outputPass);
+
   const urlMatch = resolveInitialMatchFromUrl();
   const replayMode = resolveReplayModeFromUrl();
   const debugWeaponsWall = resolveDebugWeaponsWallFromUrl();
@@ -95,31 +126,23 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
   let replaySaved = false;
   let replayFinished = false;
 
-  const cameraRig = new CameraRig({
-    fov: 50,
-    near: 0.1,
-    far: 200,
-    offset: new THREE.Vector3(0, 4.2, 6.8),
-    lookAtOffset: new THREE.Vector3(0, 0.9, 0)
-  });
-  const camera = cameraRig.camera;
-
-  const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.6); // Increased ambient for perception
   scene.add(ambient);
 
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x7a5b3a, 0.65);
+  const hemi = new THREE.HemisphereLight(0xffeeb1, 0x080820, 0.8); // Warm sky, dark ground
   scene.add(hemi);
 
-  const dir = new THREE.DirectionalLight(0xfff2d6, 1.05);
-  dir.position.set(6, 10, 8);
+  const dir = new THREE.DirectionalLight(0xfff2d6, 1.5); // Stronger key light
+  dir.position.set(8, 12, 5);
   dir.castShadow = true;
-  dir.shadow.mapSize.set(1024, 1024);
+  dir.shadow.mapSize.set(2048, 2048); // Higher quality shadows
+  dir.shadow.bias = -0.0005;
   dir.shadow.camera.near = 0.5;
   dir.shadow.camera.far = 40;
-  dir.shadow.camera.left = -12;
-  dir.shadow.camera.right = 12;
-  dir.shadow.camera.top = 12;
-  dir.shadow.camera.bottom = -12;
+  dir.shadow.camera.left = -14;
+  dir.shadow.camera.right = 14;
+  dir.shadow.camera.top = 14;
+  dir.shadow.camera.bottom = -14;
   scene.add(dir);
 
   if (!replayData) {
@@ -655,9 +678,10 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
       const { clientWidth, clientHeight } = renderer.domElement;
       camera.aspect = clientWidth / clientHeight;
       camera.updateProjectionMatrix();
+      composer.setSize(clientWidth, clientHeight);
     }
 
-    renderer.render(scene, camera);
+    composer.render();
     input.endFrame();
   };
 

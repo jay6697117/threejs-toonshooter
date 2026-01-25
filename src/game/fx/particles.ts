@@ -31,7 +31,7 @@ export function createParticleSystem(scene: THREE.Scene): ParticleSystem {
   const spawn = (pos: THREE.Vector3, opts: { color: number; durationSeconds: number; startScale: number; endScale: number; opacity: number }): void => {
     const pooled = pool.pop();
     const mat = pooled?.mat ?? new THREE.MeshBasicMaterial({ color: opts.color, transparent: true, opacity: opts.opacity });
-    mat.color.setHex(opts.color);
+    mat.color.setHex(opts.color).multiplyScalar(2.0); // Boost for Bloom
     mat.opacity = opts.opacity;
 
     const mesh = pooled?.mesh ?? new THREE.Mesh(sphereGeo, mat);
