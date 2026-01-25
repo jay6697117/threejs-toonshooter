@@ -54,6 +54,8 @@ export function updateWeapons(
     }
   }
 
+  if (entity.eliminated) return { shotsFired: 0 };
+
   const weaponId = entity.weaponSlots[entity.activeWeaponSlot];
   if (!weaponId) return { shotsFired: 0 };
   const state = entity.weaponSlotStates[entity.activeWeaponSlot];

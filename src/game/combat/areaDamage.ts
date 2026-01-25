@@ -20,7 +20,7 @@ export function applyExplosion(
   maxDamage: number,
   options?: ExplosionOptions
 ): void {
-  const friendlyMul = options?.friendlyFireMultiplier ?? 1.0;
+  const friendlyMul = options?.friendlyFireMultiplier ?? 0.0;
   const knockback = options?.knockbackDistance ?? 0;
 
   for (const entity of entities) {

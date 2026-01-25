@@ -4,6 +4,8 @@ import type { ModeId } from '../config/ids';
 import type { World } from '../core/world';
 import type { Entity, TeamId } from '../entities/entityBase';
 
+const DEFAULT_RESPAWN_SECONDS = 2.5;
+
 export type MatchPhase = 'playing' | 'ended';
 
 export type DuelMatchState = {
@@ -117,12 +119,19 @@ export function initializeMatchPlayers(world: World, runtime: MatchRuntime): voi
   if (!world.arena) throw new Error('World arena is not loaded');
 
   for (const entity of world.entities) {
+    entity.eliminated = false;
+    entity.deathProcessed = false;
     entity.livesLeft = 0;
     entity.respawnTimer = 0;
     entity.kills = 0;
     entity.deaths = 0;
     entity.score = 0;
     entity.carryingFlag = null;
+    entity.lastAttackerId = null;
+    entity.lastAttackerTeam = null;
+    entity.lastWeaponId = null;
+    entity.hp = entity.maxHp;
+    entity.statuses.clear();
   }
 
   if (runtime.modeId === 'ffa') {
@@ -131,6 +140,51 @@ export function initializeMatchPlayers(world: World, runtime: MatchRuntime): voi
     for (const entity of world.entities) entity.livesLeft = 1;
   } else {
     for (const entity of world.entities) entity.livesLeft = 9999;
+  }
+}
+
+export function processDeaths(world: World, runtime: MatchRuntime): void {
+  if (!world.arena) return;
+
+  for (const entity of world.entities) {
+    if (!entity.eliminated) continue;
+    if (entity.deathProcessed) continue;
+
+    entity.deathProcessed = true;
+    entity.deaths += 1;
+
+    const attacker = entity.lastAttackerId ? world.entities.find((e) => e.id === entity.lastAttackerId) : undefined;
+    if (attacker && attacker.id !== entity.id) {
+      attacker.kills += 1;
+      attacker.score += 1;
+    }
+
+    if (runtime.state.modeId === 'duel') {
+      entity.respawnTimer = 0;
+      continue;
+    }
+
+    if (runtime.state.modeId === 'ffa') {
+      entity.livesLeft = Math.max(0, entity.livesLeft - 1);
+      entity.respawnTimer = entity.livesLeft > 0 ? DEFAULT_RESPAWN_SECONDS : 0;
+      continue;
+    }
+
+    if (runtime.state.modeId === 'siege') {
+      if (entity.team === 'blue') {
+        if (runtime.state.defenderRespawnsLeft > 0) {
+          runtime.state.defenderRespawnsLeft = Math.max(0, runtime.state.defenderRespawnsLeft - 1);
+          entity.respawnTimer = DEFAULT_RESPAWN_SECONDS;
+        } else {
+          entity.respawnTimer = 0;
+        }
+      } else {
+        entity.respawnTimer = DEFAULT_RESPAWN_SECONDS;
+      }
+      continue;
+    }
+
+    entity.respawnTimer = DEFAULT_RESPAWN_SECONDS;
   }
 }
 
@@ -168,12 +222,17 @@ export function respawnEntity(world: World, runtime: MatchRuntime, entity: Entit
   if (!world.arena) return;
 
   entity.eliminated = false;
+  entity.deathProcessed = false;
   entity.hp = entity.maxHp;
   entity.statuses.clear();
   entity.velocity.set(0, 0, 0);
   entity.dashTimer = 0;
   entity.dashCooldown = 0;
   entity.carryingFlag = null;
+  entity.respawnTimer = 0;
+  entity.lastAttackerId = null;
+  entity.lastAttackerTeam = null;
+  entity.lastWeaponId = null;
 
   const spawn = pickSpawn(world, runtime.modeId, entity);
   entity.position.copy(spawn);
@@ -231,18 +290,16 @@ function updateDuel(world: World, state: DuelMatchState, dt: number): void {
 function updateFfa(world: World, state: FfaMatchState, dt: number): void {
   state.timeLeft = Math.max(0, state.timeLeft - dt);
 
-  const alive = world.entities.filter((e) => !e.eliminated || e.livesLeft > 0);
-  const aliveNow = world.entities.filter((e) => !e.eliminated);
-
-  if (aliveNow.length === 1) {
-    state.winnerId = aliveNow[0].id;
+  const inMatch = world.entities.filter((e) => e.livesLeft > 0);
+  if (inMatch.length === 1) {
+    state.winnerId = inMatch[0].id;
     state.phase = 'ended';
     return;
   }
 
   if (state.timeLeft > 0) return;
 
-  const ranked = alive
+  const ranked = inMatch
     .slice()
     .sort((a, b) => b.score * 1000 + b.hp - (a.score * 1000 + a.hp));
   state.winnerId = ranked[0]?.id ?? null;
@@ -282,7 +339,7 @@ function updateSiege(world: World, state: SiegeMatchState, dt: number): void {
     return;
   }
 
-  if (state.defenderRespawnsLeft <= 0 && defenders.every((d) => d.eliminated)) {
+  if (state.defenderRespawnsLeft <= 0 && defenders.length === 0) {
     state.phase = 'ended';
     state.winnerTeam = 'red';
   }
@@ -422,4 +479,3 @@ function isInsideCircleXZ(pos: THREE.Vector3, center: THREE.Vector3, radius: num
   const dz = pos.z - center.z;
   return dx * dx + dz * dz <= radius * radius;
 }
-

@@ -27,6 +27,7 @@ export function cycleActiveThrowableSlot(entity: Entity): void {
 
 export function tryUseActiveThrowable(entity: Entity, aimPoint: THREE.Vector3 | null, world: ThrowablesWorld): boolean {
   if (!aimPoint) return false;
+  if (entity.eliminated) return false;
 
   const activeSlot = entity.throwableSlots[entity.activeThrowableSlot];
   let slotIdx = entity.activeThrowableSlot;
@@ -448,4 +449,3 @@ function createTrapMesh(category: string): THREE.Object3D {
   mesh.castShadow = true;
   return mesh;
 }
-

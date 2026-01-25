@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { World } from '../core/world';
 import { WEAPON_CONFIGS } from '../config/weapons';
+import type { DifficultyConfig } from '../config/difficulty';
 import type { Entity } from './entityBase';
 import type { WeaponFrameInput } from '../weapons/weaponManager';
 import type { MatchRuntime } from '../modes/modeManager';
@@ -25,6 +26,7 @@ export function computeAiFrame(
   ai: AiControllerState,
   world: World,
   match: MatchRuntime,
+  difficulty: DifficultyConfig,
   dt: number
 ): { moveDir: THREE.Vector3; dashRequested: boolean; aimPoint: THREE.Vector3 | null; weaponInput: WeaponFrameInput } {
   const aimTarget = pickAimTarget(entity, ai, world, match);
@@ -54,8 +56,12 @@ export function computeAiFrame(
   }
 
   const aimPoint = aimTarget ? new THREE.Vector3(aimTarget.position.x, entity.position.y, aimTarget.position.z) : goal;
+  if (aimPoint && aimTarget) {
+    const visibility = computeVisibilityFactor(world, entity.position, aimTarget.position, entity.isInDark, aimTarget.isInDark);
+    applyAimNoise(aimPoint, entity.position, visibility, aimTarget.position.distanceTo(entity.position), difficulty.aiAimErrorMultiplier);
+  }
 
-  const weaponInput = computeWeaponInput(entity, ai, aimTarget, match, dt);
+  const weaponInput = computeWeaponInput(entity, ai, aimTarget, match, world, difficulty, dt);
   return { moveDir, dashRequested, aimPoint, weaponInput };
 }
 
@@ -115,7 +121,15 @@ function pickAimTarget(entity: Entity, ai: AiControllerState, world: World, matc
   return best;
 }
 
-function computeWeaponInput(entity: Entity, ai: AiControllerState, target: Entity | null, match: MatchRuntime, dt: number): WeaponFrameInput {
+function computeWeaponInput(
+  entity: Entity,
+  ai: AiControllerState,
+  target: Entity | null,
+  match: MatchRuntime,
+  world: World,
+  difficulty: DifficultyConfig,
+  dt: number
+): WeaponFrameInput {
   void dt;
 
   const weaponId = entity.weaponSlots[entity.activeWeaponSlot];
@@ -134,8 +148,17 @@ function computeWeaponInput(entity: Entity, ai: AiControllerState, target: Entit
 
   const reloadPressed = state.ammo === 0 && state.reserve > 0 && state.reloadTimer <= 0;
 
+  const visibility = target
+    ? computeVisibilityFactor(world, entity.position, target.position, entity.isInDark, target.isInDark)
+    : 0;
+
   if (cfg.charge) {
     if (!inRange) {
+      ai.fireDown = false;
+      return { fireDown: false, firePressed: false, fireReleased: false, reloadPressed };
+    }
+
+    if (target && visibility < 0.25) {
       ai.fireDown = false;
       return { fireDown: false, firePressed: false, fireReleased: false, reloadPressed };
     }
@@ -159,12 +182,71 @@ function computeWeaponInput(entity: Entity, ai: AiControllerState, target: Entit
     return { fireDown: false, firePressed: false, fireReleased: false, reloadPressed };
   }
 
+  const confidence = Math.max(0, Math.min(1, visibility * 1.1 * difficulty.aiFireConfidenceMultiplier));
+  const shouldFire = target ? Math.random() < confidence : false;
+
   if (cfg.auto) {
-    ai.fireDown = true;
-    return { fireDown: true, firePressed: false, fireReleased: false, reloadPressed };
+    ai.fireDown = shouldFire;
+    return { fireDown: ai.fireDown, firePressed: false, fireReleased: false, reloadPressed };
   }
 
   ai.fireDown = false;
-  return { fireDown: false, firePressed: true, fireReleased: false, reloadPressed };
+  return { fireDown: false, firePressed: shouldFire, fireReleased: false, reloadPressed };
 }
 
+function computeVisibilityFactor(world: World, from: THREE.Vector3, to: THREE.Vector3, fromDark: boolean, toDark: boolean): number {
+  let factor = 1;
+
+  if (fromDark || toDark) factor *= 0.55;
+
+  for (const s of world.smokes) {
+    const distSq = distancePointToSegmentSqXZ(s.position, from, to);
+    if (distSq > s.radius * s.radius) continue;
+    factor *= s.smokeType === 'poison' ? 0.35 : 0.55;
+  }
+
+  return Math.max(0, Math.min(1, factor));
+}
+
+function distancePointToSegmentSqXZ(point: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3): number {
+  const ax = a.x;
+  const az = a.z;
+  const bx = b.x;
+  const bz = b.z;
+  const px = point.x;
+  const pz = point.z;
+
+  const abx = bx - ax;
+  const abz = bz - az;
+  const apx = px - ax;
+  const apz = pz - az;
+
+  const denom = abx * abx + abz * abz;
+  const t = denom <= 1e-6 ? 0 : Math.max(0, Math.min(1, (apx * abx + apz * abz) / denom));
+  const cx = ax + abx * t;
+  const cz = az + abz * t;
+  const dx = px - cx;
+  const dz = pz - cz;
+  return dx * dx + dz * dz;
+}
+
+function applyAimNoise(
+  aimPoint: THREE.Vector3,
+  shooterPos: THREE.Vector3,
+  visibility: number,
+  distance: number,
+  aimErrorMultiplier: number
+): void {
+  const t = Math.max(0, Math.min(1, distance / 30));
+  const base = 0.08 + t * 0.45;
+  const penalty = 1 - visibility;
+  const error = base * (0.35 + penalty * 2.4) * aimErrorMultiplier;
+
+  const nx = (Math.random() - 0.5) * 2 * error;
+  const nz = (Math.random() - 0.5) * 2 * error;
+
+  aimPoint.x += nx;
+  aimPoint.z += nz;
+
+  void shooterPos;
+}

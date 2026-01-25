@@ -7,9 +7,10 @@ import { clampToBounds, resolveCircleVsAabb, resolveCircleVsCircle } from '../co
 import { applyDamageToCover } from '../combat/coverDamage';
 import { dealDamage } from '../combat/damage';
 import { updateStatusEffects } from '../combat/statusEffects';
+import { DIFFICULTY_CONFIGS, DIFFICULTY_IDS, type DifficultyId } from '../config/difficulty';
 import { GAME_CONFIG } from '../config/game';
 import { MODE_CONFIGS } from '../config/modes';
-import { MODE_IDS, SCENE_IDS, type ModeId, type SceneId } from '../config/ids';
+import { CHARACTER_IDS, MODE_IDS, SCENE_IDS, type CharacterId, type ModeId, type SceneId } from '../config/ids';
 import { WEAPON_CONFIGS } from '../config/weapons';
 import { AudioManager } from '../core/audio';
 import { Assets } from '../core/assets';
@@ -22,12 +23,15 @@ import { loadSettings, saveSettings } from '../core/storage';
 import { createWorld } from '../core/world';
 import { syncVisual } from '../entities/entityBase';
 import { updatePlayer } from '../entities/player';
-import { createMatchRuntime, initializeMatchPlayers, updateMatch, applyRespawns } from '../modes/modeManager';
+import { updateCharacterMovement } from '../entities/movement';
+import { ensureAiControllerState, computeAiFrame, type AiControllerState } from '../entities/aiController';
+import { createMatchRuntime, initializeMatchPlayers, processDeaths, updateMatch, applyRespawns } from '../modes/modeManager';
 import { spawnPlayersForMode } from '../modes/spawnPlayers';
 import { applyWeaponHitToEntity } from '../weapons/fireWeapon';
 import { type Projectile, updateProjectiles } from '../weapons/projectile';
 import { updateWeapons } from '../weapons/weaponManager';
 import { cycleActiveThrowableSlot, tryUseActiveThrowable, updateThrowables } from '../throwables/throwableManager';
+import type { SanguoShooterUiState } from './uiState';
 
 export type SanguoShooterApp = {
   renderer: THREE.WebGLRenderer;
@@ -39,6 +43,8 @@ export type SanguoShooterApp = {
   beginFrame: (frameDt: number) => void;
   step: (fixedDt: number) => void;
   frame: (alpha: number) => void;
+  getUiState: () => SanguoShooterUiState;
+  setPaused: (value: boolean) => void;
   dispose: () => void;
 };
 
@@ -83,13 +89,15 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
   dir.shadow.camera.bottom = -12;
   scene.add(dir);
 
-  const { modeId, sceneId } = resolveInitialMatchFromUrl();
+  const { modeId, sceneId, difficultyId, characterId } = resolveInitialMatchFromUrl();
+  const difficulty = DIFFICULTY_CONFIGS[difficultyId];
   const arenaScale = modeId === 'ffa' ? MODE_CONFIGS.ffa.arenaScale : 1;
   loadArena(scene, world, modeId, sceneId, { arenaScale });
 
   const match = createMatchRuntime(modeId, 'p1');
   const { human } = spawnPlayersForMode(scene, world, assets, modeId, { humanId: match.humanId });
   initializeMatchPlayers(world, match);
+  const aiStates = new Map<string, AiControllerState>();
 
   const picker = new GroundPicker();
   picker.setGroundY(0);
@@ -184,6 +192,14 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
         traps: world.traps
       });
       frameThrowPressed = false;
+    }
+
+    for (const entity of world.entities) {
+      if (!entity.isAI) continue;
+      const ai = ensureAiControllerState(aiStates, entity.id);
+      const aiFrame = computeAiFrame(entity, ai, world, match, difficulty, fixedDt);
+      updateCharacterMovement(entity, aiFrame.moveDir, aiFrame.aimPoint, fixedDt, aiFrame.dashRequested);
+      updateWeapons(entity, aiFrame.weaponInput, aiFrame.aimPoint, fixedDt, { scene, entities: world.entities, covers: world.covers, projectiles: world.projectiles });
     }
 
     updateThrowables(
@@ -316,8 +332,9 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
     }
     world.projectiles = remaining;
 
-    applyRespawns(world, match, fixedDt);
+    processDeaths(world, match);
     updateMatch(world, match, fixedDt);
+    applyRespawns(world, match, fixedDt);
 
     cameraRig.setTargetPosition(human.position);
     cameraRig.update(fixedDt);
@@ -345,16 +362,90 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
     saveSettings(settings);
   };
 
-  return { renderer, scene, camera, input, assets, audio, beginFrame, step, frame, dispose };
+  const getUiState = (): SanguoShooterUiState => {
+    const activeWeaponId = human.weaponSlots[human.activeWeaponSlot] ?? null;
+    const activeWeaponState = human.weaponSlotStates[human.activeWeaponSlot];
+    const activeThrowable = human.throwableSlots[human.activeThrowableSlot];
+
+    return {
+      modeId: match.modeId,
+      sceneId: world.arena?.sceneId ?? sceneId,
+      paused,
+      scoreboardHeld: input.isDown('scoreboard'),
+      match: match.state,
+      timeSeconds: world.timeSeconds,
+      humanId: human.id,
+      human: {
+        id: human.id,
+        team: human.team,
+        isAI: human.isAI,
+        hp: human.hp,
+        maxHp: human.maxHp,
+        eliminated: human.eliminated,
+        livesLeft: human.livesLeft,
+        kills: human.kills,
+        deaths: human.deaths,
+        score: human.score,
+        carryingFlag: human.carryingFlag,
+        characterId,
+        damageDealtMultiplier: human.damageDealtMultiplier,
+        isInDark: human.isInDark,
+        isInWater: human.isInWater,
+        dashTimer: human.dashTimer,
+        dashCooldown: human.dashCooldown,
+        weaponSlots: human.weaponSlots.slice(),
+        activeWeaponSlot: human.activeWeaponSlot,
+        activeWeaponId,
+        activeWeaponState: activeWeaponState
+          ? {
+              weaponId: activeWeaponState.weaponId,
+              ammo: activeWeaponState.ammo,
+              reserve: activeWeaponState.reserve,
+              reloadTimer: activeWeaponState.reloadTimer,
+              cooldownTimer: activeWeaponState.cooldownTimer,
+              chargeSeconds: activeWeaponState.chargeSeconds,
+              burstShotsRemaining: activeWeaponState.burstShotsRemaining
+            }
+          : null,
+        throwableSlots: human.throwableSlots.slice(),
+        activeThrowableSlot: human.activeThrowableSlot,
+        activeThrowable: activeThrowable ? { id: activeThrowable.id, count: activeThrowable.count } : null,
+        statuses: Array.from(human.statuses.values()).map((s) => ({ id: s.id, timeLeft: s.timeLeft }))
+      },
+      entities: world.entities.map((e) => ({
+        id: e.id,
+        team: e.team,
+        isAI: e.isAI,
+        hp: e.hp,
+        maxHp: e.maxHp,
+        eliminated: e.eliminated,
+        livesLeft: e.livesLeft,
+        kills: e.kills,
+        deaths: e.deaths,
+        score: e.score,
+        carryingFlag: e.carryingFlag
+      }))
+    };
+  };
+
+  const setPaused = (value: boolean): void => {
+    paused = value;
+  };
+
+  return { renderer, scene, camera, input, assets, audio, beginFrame, step, frame, getUiState, setPaused, dispose };
 }
 
-function resolveInitialMatchFromUrl(): { modeId: ModeId; sceneId: SceneId } {
+function resolveInitialMatchFromUrl(): { modeId: ModeId; sceneId: SceneId; difficultyId: DifficultyId; characterId: CharacterId | null } {
   const params = new URLSearchParams(window.location.search);
   const modeRaw = params.get('mode');
   const sceneRaw = params.get('scene');
+  const difficultyRaw = params.get('difficulty');
+  const characterRaw = params.get('character');
   const modeId = isModeId(modeRaw) ? modeRaw : 'duel';
   const sceneId = isSceneId(sceneRaw) ? sceneRaw : 'trainingGround';
-  return { modeId, sceneId };
+  const difficultyId = isDifficultyId(difficultyRaw) ? difficultyRaw : 'normal';
+  const characterId = isCharacterId(characterRaw) ? characterRaw : null;
+  return { modeId, sceneId, difficultyId, characterId };
 }
 
 function isModeId(value: string | null): value is ModeId {
@@ -365,4 +456,14 @@ function isModeId(value: string | null): value is ModeId {
 function isSceneId(value: string | null): value is SceneId {
   if (!value) return false;
   return (SCENE_IDS as readonly string[]).includes(value);
+}
+
+function isDifficultyId(value: string | null): value is DifficultyId {
+  if (!value) return false;
+  return (DIFFICULTY_IDS as readonly string[]).includes(value);
+}
+
+function isCharacterId(value: string | null): value is CharacterId {
+  if (!value) return false;
+  return (CHARACTER_IDS as readonly string[]).includes(value);
 }
