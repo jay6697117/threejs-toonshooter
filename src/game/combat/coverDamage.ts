@@ -1,14 +1,16 @@
 import * as THREE from 'three';
-import type { Cover } from '../arena/cover';
+import { createBoxCover, type Cover } from '../arena/cover';
 import type { Entity, TeamId } from '../entities/entityBase';
+import type { Rng } from '../core/rng';
 import { applyExplosion } from './areaDamage';
 
 export function applyDamageToCover(
   scene: THREE.Scene,
   entities: Entity[],
+  covers: Cover[],
   cover: Cover,
   amount: number,
-  options?: { ignite?: boolean; attackerId?: string; attackerTeam?: TeamId }
+  options?: { ignite?: boolean; attackerId?: string; attackerTeam?: TeamId; rng?: Rng }
 ): void {
   if (!cover.active) return;
   if (!cover.destructible) return;
@@ -34,5 +36,18 @@ export function applyDamageToCover(
       statusEffects: cover.onDestroyedExplosion.statusEffects
     });
   }
-}
 
+  if (cover.onDestroyedSpawnCover) {
+    const idSuffix = options?.rng ? options.rng.nextUint32().toString(36) : String(Math.floor(Math.random() * 1e9));
+    const spawned = createBoxCover({
+      id: `${cover.id}_spawn_${idSuffix}`,
+      size: cover.onDestroyedSpawnCover.size,
+      pos: cover.mesh.position.clone(),
+      color: cover.onDestroyedSpawnCover.color,
+      hp: cover.onDestroyedSpawnCover.hp
+    });
+    spawned.timeLeftSeconds = cover.onDestroyedSpawnCover.timeLeftSeconds;
+    scene.add(spawned.mesh);
+    covers.push(spawned);
+  }
+}

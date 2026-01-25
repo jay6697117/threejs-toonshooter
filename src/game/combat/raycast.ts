@@ -32,6 +32,7 @@ export function raycast(options: {
 
   for (const cover of options.covers) {
     if (!cover.active) continue;
+    if (cover.blocksProjectiles === false) continue;
     const point = ray.intersectBox(cover.box, new THREE.Vector3());
     if (!point) continue;
     const t = options.origin.distanceTo(point);
@@ -68,6 +69,7 @@ export function raycastAll(options: {
 
   for (const cover of options.covers) {
     if (!cover.active) continue;
+    if (cover.blocksProjectiles === false) continue;
     const point = ray.intersectBox(cover.box, new THREE.Vector3());
     if (!point) continue;
     const t = options.origin.distanceTo(point);

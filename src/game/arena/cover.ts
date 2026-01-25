@@ -10,6 +10,13 @@ export type CoverExplosion = {
   knockbackDistance?: number;
 };
 
+export type CoverSpawnOnDestroy = {
+  size: THREE.Vector3;
+  hp: number;
+  color?: number;
+  timeLeftSeconds?: number;
+};
+
 export type Cover = {
   id: CoverId;
   mesh: THREE.Object3D;
@@ -20,12 +27,16 @@ export type Cover = {
   destructible: boolean;
   hp: number;
   maxHp: number;
+  pushable?: boolean;
+  toggleable?: boolean;
+  blocksProjectiles?: boolean;
   burnable?: boolean;
   burnTimeLeftSeconds?: number;
   burnSeconds?: number;
   burnRadiusMeters?: number;
   burnDamagePerSecond?: number;
   onDestroyedExplosion?: CoverExplosion;
+  onDestroyedSpawnCover?: CoverSpawnOnDestroy;
 };
 
 export function createBoxCover(options: {
@@ -55,12 +66,15 @@ export function createBoxCover(options: {
     destructible: true,
     hp,
     maxHp: hp,
+    pushable: false,
+    toggleable: false,
+    blocksProjectiles: true,
     burnable: false,
     burnTimeLeftSeconds: 0
   };
 }
 
 export function updateCoverAabb(cover: Cover): void {
-  cover.box = new THREE.Box3().setFromObject(cover.mesh);
+  cover.box.setFromObject(cover.mesh);
   cover.aabb = computeAabbFromBox3(cover.box);
 }

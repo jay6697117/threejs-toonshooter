@@ -6,6 +6,7 @@ export type InputAction =
   | 'dash'
   | 'fire'
   | 'aimSecondary'
+  | 'interact'
   | 'reload'
   | 'throw'
   | 'weaponSlot1'
@@ -35,6 +36,7 @@ const DEFAULT_KEY_BINDINGS: Record<string, InputAction> = {
   KeyA: 'moveLeft',
   KeyD: 'moveRight',
   Space: 'dash',
+  KeyE: 'interact',
   KeyR: 'reload',
   KeyG: 'throw',
   Digit1: 'weaponSlot1',
@@ -56,6 +58,7 @@ function createActionMap(initial: boolean): Record<InputAction, boolean> {
     dash: initial,
     fire: initial,
     aimSecondary: initial,
+    interact: initial,
     reload: initial,
     throw: initial,
     weaponSlot1: initial,

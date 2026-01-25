@@ -15,8 +15,16 @@
 - 资产：允许 “placeholder（逻辑完整）→ 最终 glTF 替换” 的交付节奏。
 - 交互语言：所有交互/说明使用中文；代码/标识符/字符串/注释使用 English。
 
-## 当前阶段（Phase 0）
-把工程跑通并固化架构边界，确保后续扩展不会反复推翻基础设施。
+## Phase 状态概览（2026-01-25）
+- Phase 0-5：已完成（工程/内核/世界/战斗底座/15 武器/9 副武器 first playable pass）
+- Phase 6：部分完成（场景/掩体/事件/调试已落地；仍缺 `climbable` 与 `per-scene preload groups`）
+- Phase 7-9：已完成（4 模式 + AI + UI）
+- Phase 10：部分完成（tracer/particles/screenFx/audio 占位已起；仍缺 near-miss/slowmo/更多粒子与音频覆盖）
+- Phase 11：未开始（`public/assets.json` 的 `sanguoShooter` 命名空间 + 12 角色皮肤/动画/场景资产替换）
+- Phase 12：未开始（seedable RNG + record/replay + 单测 + 性能预算 + 发布验收）
+
+## 当前阶段（Phase 10-12）
+目标：把“可复现/可回归/可持续迭代”的工程能力补齐，确保后续替换 glTF 资产时不会回归玩法。
 
 ### Phase 0 - Checklist
 - [x] 新增 Vite/TS 工程文件：`package.json`、`vite.config.ts`、`tsconfig.json` 等
@@ -67,44 +75,24 @@
 - [x] `weapons/weaponManager.ts`：switch/reload/charge/burstAll（输入边沿不丢帧）
 - [x] `weapons/fireWeapon.ts`：pellets/doubleShot/penetrate/charge damage snapshot
 
-## 后续阶段（Phase 1+，仅做路线图）
-> 说明：每个阶段的“完成条件”必须可验证（可运行/可复现/可回归），避免只写代码不形成可用增量。
+## Phase 10-12 - Checklist（待完成）
 
-### Phase 1 - Core Runtime
-- 渲染器/相机/输入/主循环（fixed timestep + render interpolation）
-- 资源系统（manifest + glTF cache + per-scene preload groups）
-- 存档设置（版本化 default + migration）
-- 音频骨架（SFX/Music buses + unlock）
+### Phase 10（VFX/SFX）
+- [ ] `fx/tracers.ts`：weapon-specific tracer styles（当前仅按 category 上色）
+- [ ] `fx/particles.ts`：explosion/smoke/fire/poison/petals（当前仅 impact/explosion puff）
+- [ ] `fx/screenFx.ts`：hit flash/vignette/near-miss/slowmo/shake/blind blur（当前缺 near-miss/slowmo 等）
+- [ ] `core/audio.ts` + `audio/sfxMap.ts`：weapon/impact/ambient（当前仅 beep-based 占位）
 
-### Phase 2 - World & Entities
-- Entity 基类（玩家/AI 共用字段）
-- Movement + Collision（Circle-vs-AABB/Circle-vs-Circle + bounds）
-- Pickups/Drop/Airdrop（可配置规则）
+### Phase 11（Content Assets）
+- [ ] `public/assets.json` 扩展 `sanguoShooter` 命名空间
+- [ ] 角色骨骼与动画共享（12 皮肤 + 1 套动画）
+- [ ] 场景资产与碰撞盒校准
 
-### Phase 3 - Combat Foundation
-- Hitscan + Projectile + AOE
-- Damage pipeline + Difficulty tuning
-- Status effects（8 core + trap control states）
-
-### Phase 4 - Weapons (15)
-- Weapon manager + weapon state machine
-- 15 主武器配置落地 + 行为实现 + VFX hooks
-
-### Phase 5 - Throwables (9)
-- 2-slot inventory + preview + placement + triggers
-- 9 副武器实现 + AI 使用策略
-
-### Phase 6 - Arenas (10)
-- Arena manager + cover/interactable components
-- 10 场景配置 + 机关/事件 + AI 导航图
-
-### Phase 7 - Modes (4)
-- Mode manager
-- duel/ffa/siege/ctf 胜负逻辑 + UI + AI 目标
-
-### Phase 8 - Polish
-- VFX/SFX 完整链路
-- 调试面板、回放/种子化 RNG、性能预算与回归
+### Phase 12（验证/回归/性能/发布）
+- [ ] seedable RNG + basic record/replay（至少记录 input + key events）
+- [ ] `node --test`：纯逻辑单测（status stacking, aoe falloff, win conditions）
+- [ ] perf budget：object pools + cap limits + AI throttling + scene unload
+- [ ] Vercel smoke checklist（路径、缓存头、资源 404）
 
 ## 风险清单（持续更新）
 | 风险 | 触发点 | 影响 | 缓解策略 |

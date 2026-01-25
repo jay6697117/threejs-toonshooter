@@ -4,6 +4,7 @@ import { dealDamage } from '../combat/damage';
 import { applyStatus, hasStatus } from '../combat/statusEffects';
 import { THROWABLE_CONFIGS } from '../config/throwables';
 import type { ThrowableId } from '../config/ids';
+import type { Rng } from '../core/rng';
 import type { Entity } from '../entities/entityBase';
 import type { AreaEffect, SmokeVolume, ThrowableProjectile, TrapInstance } from './types';
 
@@ -14,6 +15,7 @@ export type ThrowablesWorld = {
   smokes: SmokeVolume[];
   areas: AreaEffect[];
   traps: TrapInstance[];
+  rng: Rng;
 };
 
 const GRAVITY = -18;
@@ -106,7 +108,7 @@ function spawnProjectile(world: ThrowablesWorld, throwableId: ThrowableId, owner
         : 0;
 
   const projectile: ThrowableProjectile = {
-    id: `th_${throwableId}_${owner.id}_${Math.floor(Math.random() * 1e9)}`,
+    id: world.rng.nextId(`th_${throwableId}_${owner.id}`),
     throwableId,
     ownerId: owner.id,
     ownerTeam: owner.team,
@@ -179,7 +181,7 @@ function spawnSmoke(world: ThrowablesWorld, throwableId: ThrowableId, owner: Ent
   world.scene.add(mesh);
 
   const smoke: SmokeVolume = {
-    id: `sm_${throwableId}_${owner.id}_${Math.floor(Math.random() * 1e9)}`,
+    id: world.rng.nextId(`sm_${throwableId}_${owner.id}`),
     throwableId,
     ownerId: owner.id,
     ownerTeam: owner.team,
@@ -238,7 +240,7 @@ function spawnArea(world: ThrowablesWorld, throwableId: ThrowableId, owner: Enti
   world.scene.add(mesh);
 
   const area: AreaEffect = {
-    id: `ar_${throwableId}_${owner.id}_${Math.floor(Math.random() * 1e9)}`,
+    id: world.rng.nextId(`ar_${throwableId}_${owner.id}`),
     throwableId,
     ownerId: owner.id,
     ownerTeam: owner.team,
@@ -320,7 +322,7 @@ function spawnTrap(world: ThrowablesWorld, throwableId: ThrowableId, owner: Enti
 
   const radius = cfg.effect.radiusMeters ?? 1.0;
   const trap: TrapInstance = {
-    id: `tp_${throwableId}_${owner.id}_${Math.floor(Math.random() * 1e9)}`,
+    id: world.rng.nextId(`tp_${throwableId}_${owner.id}`),
     throwableId,
     ownerId: owner.id,
     ownerTeam: owner.team,

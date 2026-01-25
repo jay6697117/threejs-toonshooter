@@ -6,6 +6,7 @@ import type { Cover } from '../arena/cover';
 import type { Projectile } from './projectile';
 import { fireWeapon } from './fireWeapon';
 import { ensureWeaponSlotState } from './weaponState';
+import type { Rng } from '../core/rng';
 
 export type WeaponFrameInput = {
   fireDown: boolean;
@@ -19,6 +20,7 @@ export type WeaponManagerContext = {
   entities: Entity[];
   covers: Cover[];
   projectiles: Projectile[];
+  rng: Rng;
 };
 
 export function ensureEntityWeaponSlotStates(entity: Entity): void {
@@ -130,7 +132,7 @@ function tryFireWeapon(
     return { shotsFired: 0 };
   }
 
-  const result = fireWeapon(entity, weaponId, aimPoint, context, { chargeRatio });
+  const result = fireWeapon(entity, weaponId, aimPoint, context, { chargeRatio, rng: context.rng });
   state.cooldownTimer = 1 / cfg.fireRatePerSecond;
   consumeAmmo(weaponId, state, result.ammoConsumed);
   return { shotsFired: 1 };

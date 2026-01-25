@@ -3,6 +3,7 @@ import { MODE_CONFIGS } from '../config/modes';
 import type { ModeId } from '../config/ids';
 import type { World } from '../core/world';
 import type { Entity, TeamId } from '../entities/entityBase';
+import { createInitialWeaponSlotState } from '../weapons/weaponState';
 
 const DEFAULT_RESPAWN_SECONDS = 2.5;
 
@@ -233,6 +234,7 @@ export function respawnEntity(world: World, runtime: MatchRuntime, entity: Entit
   entity.lastAttackerId = null;
   entity.lastAttackerTeam = null;
   entity.lastWeaponId = null;
+  entity.weaponSlotStates = entity.weaponSlots.map((w) => (w ? createInitialWeaponSlotState(w) : null));
 
   const spawn = pickSpawn(world, runtime.modeId, entity);
   entity.position.copy(spawn);

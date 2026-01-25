@@ -7,6 +7,8 @@ import type { World } from '../core/world';
 import { applyStatus } from '../combat/statusEffects';
 import { dealDamage } from '../combat/damage';
 
+const TRAP_CENTER = new THREE.Vector3(0, 0, 0);
+
 export type ArenaRuntime = {
   def: ArenaSceneDef;
   modeId: ModeId;
@@ -39,11 +41,15 @@ export function loadArena(scene: THREE.Scene, world: World, modeId: ModeId, scen
       hp: c.hp
     });
     cover.burnable = c.burnable ?? false;
+    cover.pushable = c.pushable ?? false;
+    cover.toggleable = c.toggleable ?? false;
+    cover.blocksProjectiles = c.blocksProjectiles ?? true;
     cover.burnTimeLeftSeconds = 0;
     cover.burnSeconds = c.burnSeconds;
     cover.burnRadiusMeters = c.burnRadiusMeters;
     cover.burnDamagePerSecond = c.burnDamagePerSecond;
     cover.onDestroyedExplosion = c.onDestroyedExplosion;
+    cover.onDestroyedSpawnCover = c.onDestroyedSpawnCover;
 
     scene.add(cover.mesh);
     world.covers.push(cover);
@@ -73,8 +79,23 @@ export function loadArena(scene: THREE.Scene, world: World, modeId: ModeId, scen
     ffaSpawns: def.ffaSpawns.map((p) => scalePositionXZ(p, def.bounds, arenaScale)),
     redSpawns: def.redSpawns.map((p) => scalePositionXZ(p, def.bounds, arenaScale)),
     blueSpawns: def.blueSpawns.map((p) => scalePositionXZ(p, def.bounds, arenaScale)),
-    runtimeObjects: objects
+    runtimeObjects: objects,
+    wind: new THREE.Vector3(),
+    globalDarkTimeLeft: 0,
+    globalDarkCooldown: 0,
+    lightningCooldown: 0,
+    trapCooldown: 0
   };
+
+  if (sceneId === 'wuzhangyuanCamp') {
+    world.arena.globalDarkCooldown = 14;
+  }
+  if (sceneId === 'baidicheng') {
+    world.arena.lightningCooldown = 3;
+  }
+  if (sceneId === 'hulaoPass') {
+    world.arena.trapCooldown = 6;
+  }
 
   return { def, modeId, ground, objects };
 }
@@ -82,6 +103,7 @@ export function loadArena(scene: THREE.Scene, world: World, modeId: ModeId, scen
 export function updateArena(world: World, dt: number): void {
   if (!world.arena) return;
 
+  updateSceneEvents(world, dt);
   applyZones(world, dt);
   updateBurningCovers(world, dt);
 }
@@ -154,6 +176,7 @@ function createGround(bounds: { minX: number; maxX: number; minZ: number; maxZ: 
 
 function applyZones(world: World, dt: number): void {
   const zones = world.arena?.zones ?? [];
+  const globalDark = (world.arena?.globalDarkTimeLeft ?? 0) > 0;
 
   for (const entity of world.entities) {
     entity.damageDealtMultiplier = 1;
@@ -174,6 +197,7 @@ function applyZones(world: World, dt: number): void {
       }
     }
 
+    if (globalDark) entity.isInDark = true;
     void dt;
   }
 }
@@ -205,5 +229,74 @@ function updateBurningCovers(world: World, dt: number): void {
       dealDamage(entity, dps * dt, { isDot: true });
       applyStatus(entity, 'burn', 0.2);
     }
+
+    for (const other of world.covers) {
+      if (!other.active) continue;
+      if (!other.burnable) continue;
+      if ((other.burnTimeLeftSeconds ?? 0) > 0) continue;
+      const dist = other.mesh.position.distanceTo(cover.mesh.position);
+      if (dist > radius * 0.9) continue;
+      const burnSeconds = other.burnSeconds ?? 6;
+      other.burnTimeLeftSeconds = Math.max(other.burnTimeLeftSeconds ?? 0, burnSeconds);
+    }
+  }
+}
+
+function updateSceneEvents(world: World, dt: number): void {
+  const arena = world.arena;
+  if (!arena) return;
+
+  if (arena.sceneId === 'wuzhangyuanCamp') {
+    const t = world.timeSeconds;
+    arena.wind.set(Math.sin(t * 0.6) * 2.2, 0, Math.cos(t * 0.4) * 1.4);
+
+    arena.globalDarkTimeLeft = Math.max(0, arena.globalDarkTimeLeft - dt);
+    arena.globalDarkCooldown = Math.max(0, arena.globalDarkCooldown - dt);
+    if (arena.globalDarkTimeLeft <= 0 && arena.globalDarkCooldown <= 0) {
+      arena.globalDarkTimeLeft = 5;
+      arena.globalDarkCooldown = 25;
+    }
+  } else {
+    arena.wind.set(0, 0, 0);
+    arena.globalDarkTimeLeft = 0;
+    arena.globalDarkCooldown = 0;
+  }
+
+  if (arena.sceneId === 'baidicheng') {
+    arena.lightningCooldown = arena.lightningCooldown - dt;
+    if (arena.lightningCooldown <= 0) {
+      arena.lightningCooldown = 6 + world.rng.nextFloat() * 4;
+
+      const bounds = arena.bounds;
+      const x = bounds.minX + 2 + world.rng.nextFloat() * (bounds.maxX - bounds.minX - 4);
+      const z = bounds.minZ + 2 + world.rng.nextFloat() * (bounds.maxZ - bounds.minZ - 4);
+      const radius = 3.0;
+
+      for (const entity of world.entities) {
+        if (entity.eliminated) continue;
+        const dx = entity.position.x - x;
+        const dz = entity.position.z - z;
+        if (dx * dx + dz * dz > radius * radius) continue;
+        dealDamage(entity, 28, { isDot: false });
+        applyStatus(entity, 'stun', 0.6);
+      }
+    }
+  } else {
+    arena.lightningCooldown = 0;
+  }
+
+  if (arena.sceneId === 'hulaoPass') {
+    arena.trapCooldown = arena.trapCooldown - dt;
+    if (arena.trapCooldown <= 0) {
+      arena.trapCooldown = 12;
+      for (const entity of world.entities) {
+        if (entity.eliminated) continue;
+        if (entity.position.distanceToSquared(TRAP_CENTER) > 3.2 * 3.2) continue;
+        dealDamage(entity, 10, { isDot: false });
+        applyStatus(entity, 'knockdown', 1.2);
+      }
+    }
+  } else {
+    arena.trapCooldown = 0;
   }
 }

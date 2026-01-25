@@ -23,7 +23,10 @@
 ## 清单验收（2026-01-25）
 - Phase 0：已完成（Vite + TS、多入口、保留 legacy、build+preview 路由 OK）。
 - Phase 1-4：已完成 first playable pass（core runtime、world/entities、combat 基础、15 武器第一版）。
-- Phase 5+：仍待推进（throwables、arenas、modes、AI、UI、FX、资产替换、测试与性能阶段）。
+- Phase 5：已完成 first playable pass（9 throwables + smoke/poison/areas/traps）。
+- Phase 6：部分完成（10 场景 defs + 场景事件/区域 + debug；仍缺 `climbable` 与 per-scene preload groups）。
+- Phase 7-9：已完成（4 modes + AI（含 nav/A*）+ UI/HUD/overlays）。
+- Phase 10-12：仍待推进（更完整 VFX/SFX、`assets.json` 扩展与资产替换、seedable RNG+replay、单测、性能预算）。
 - 配置基线已固化并在启动时校验：
   - IDs: `src/game/config/ids.ts`
   - Weapons: `src/game/config/weapons.ts`

@@ -48,3 +48,24 @@
 - 行动清单回写：
   - `docs/plans/2026-01-25-sanguo-shooter-implementation-plan.md` 已更新 Phase 0-5 的勾选状态
   - `docs/plans/行动清单.md` 标记为 legacy 参考（以 Vite/TS 版清单为准）
+
+- Phase 6-9（场景/模式/AI/UI）补齐（placeholder but verifiable）：
+  - 10 场景 placeholder defs：`src/game/arena/sceneDefinitions.ts`
+  - 场景运行时与机制：`src/game/arena/arenaManager.ts`（zones / wind / global dark / lightning / trap）
+  - 掩体扩展：`src/game/arena/cover.ts`（pushable/toggleable/blocksProjectiles/onDestroyedSpawnCover）
+  - 调试可视化：`src/game/debug/arenaDebug.ts`（covers AABB / spawns / objectives）
+  - 模式与胜负：`src/game/modes/modeManager.ts` + `src/game/modes/spawnPlayers.ts`（duel/ffa/siege/ctf、AI fill、respawn/score）
+  - AI：`src/game/entities/aiController.ts` + `src/game/ai/**` + `src/game/arena/navGraph.ts`（A*、目标、投掷物占位策略）
+  - UI：`src/game/ui/index.ts` + `src/game/ui/hud.ts` + `src/game/ui/menu.ts` + `src/game/ui/overlays.ts`
+
+- Phase 10（VFX/SFX）占位链路已起：
+  - Tracers：`src/game/fx/tracers.ts`
+  - Particles：`src/game/fx/particles.ts`
+  - Screen FX：`src/game/fx/screenFx.ts`
+  - Audio：`src/game/core/audio.ts` + `src/game/audio/sfxMap.ts`
+
+## 未完成项（待推进）
+- Phase 6：`climbable` 与 per-scene preload groups
+- Phase 10：near-miss/slowmo/更多粒子与音频事件覆盖
+- Phase 11：`public/assets.json` 的 `sanguoShooter` 命名空间与资产替换策略
+- Phase 12：seedable RNG + record/replay + `node --test` + perf budget

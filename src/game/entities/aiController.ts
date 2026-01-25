@@ -5,18 +5,39 @@ import type { DifficultyConfig } from '../config/difficulty';
 import type { Entity } from './entityBase';
 import type { WeaponFrameInput } from '../weapons/weaponManager';
 import type { MatchRuntime } from '../modes/modeManager';
+import type { NavGrid } from '../arena/navGraph';
+import { findPath } from '../arena/navGraph';
+import { pickNearestEnemy } from '../ai/behaviors/targeting';
+import { pickHealthPickupGoal } from '../ai/behaviors/pickups';
+import { decideThrowableUse } from '../ai/behaviors/throwables';
+import { pickSiegeGoal } from '../ai/modeObjectives/siege';
+import { pickCtfGoal } from '../ai/modeObjectives/ctf';
+import type { Rng } from '../core/rng';
 
 export type AiControllerState = {
   nextDecisionTime: number;
   targetId: string | null;
   strafeSign: 1 | -1;
   fireDown: boolean;
+  nextPathRecalcTime: number;
+  path: THREE.Vector3[];
+  pathIndex: number;
+  throwableCooldown: number;
 };
 
-export function ensureAiControllerState(map: Map<string, AiControllerState>, entityId: string): AiControllerState {
+export function ensureAiControllerState(map: Map<string, AiControllerState>, entityId: string, rng: Rng): AiControllerState {
   const existing = map.get(entityId);
   if (existing) return existing;
-  const created: AiControllerState = { nextDecisionTime: 0, targetId: null, strafeSign: Math.random() > 0.5 ? 1 : -1, fireDown: false };
+  const created: AiControllerState = {
+    nextDecisionTime: 0,
+    targetId: null,
+    strafeSign: rng.nextSign(),
+    fireDown: false,
+    nextPathRecalcTime: 0,
+    path: [],
+    pathIndex: 0,
+    throwableCooldown: 0
+  };
   map.set(entityId, created);
   return created;
 }
@@ -27,22 +48,36 @@ export function computeAiFrame(
   world: World,
   match: MatchRuntime,
   difficulty: DifficultyConfig,
-  dt: number
-): { moveDir: THREE.Vector3; dashRequested: boolean; aimPoint: THREE.Vector3 | null; weaponInput: WeaponFrameInput } {
-  const aimTarget = pickAimTarget(entity, ai, world, match);
+  dt: number,
+  nav: NavGrid | null,
+  rng: Rng
+): {
+  moveDir: THREE.Vector3;
+  dashRequested: boolean;
+  aimPoint: THREE.Vector3 | null;
+  weaponInput: WeaponFrameInput;
+  throwRequested: boolean;
+  throwAimPoint: THREE.Vector3 | null;
+} {
+  const aimTarget = pickAimTarget(entity, ai, world);
   const goal = pickGoal(entity, world, match, aimTarget);
+
+  ai.throwableCooldown = Math.max(0, ai.throwableCooldown - dt);
+  ai.nextPathRecalcTime = Math.max(0, ai.nextPathRecalcTime - dt);
 
   const moveDir = new THREE.Vector3();
   let dashRequested = false;
 
-  if (goal) {
-    const dx = goal.x - entity.position.x;
-    const dz = goal.z - entity.position.z;
+  const moveGoal = resolveMoveGoal(entity, ai, nav, goal);
+
+  if (moveGoal) {
+    const dx = moveGoal.x - entity.position.x;
+    const dz = moveGoal.z - entity.position.z;
     const distSq = dx * dx + dz * dz;
     if (distSq > 1.8 * 1.8) {
       moveDir.set(dx, 0, dz).normalize();
       if (entity.dashCooldown <= 0 && entity.dashTimer <= 0 && distSq > 6.5 * 6.5) {
-        dashRequested = Math.random() < 0.02;
+        dashRequested = rng.nextFloat() < 0.02;
       }
     } else if (aimTarget) {
       const ax = aimTarget.position.x - entity.position.x;
@@ -55,68 +90,39 @@ export function computeAiFrame(
     }
   }
 
-  const aimPoint = aimTarget ? new THREE.Vector3(aimTarget.position.x, entity.position.y, aimTarget.position.z) : goal;
+  const aimPoint = aimTarget ? new THREE.Vector3(aimTarget.position.x, entity.position.y, aimTarget.position.z) : moveGoal;
   if (aimPoint && aimTarget) {
     const visibility = computeVisibilityFactor(world, entity.position, aimTarget.position, entity.isInDark, aimTarget.isInDark);
-    applyAimNoise(aimPoint, entity.position, visibility, aimTarget.position.distanceTo(entity.position), difficulty.aiAimErrorMultiplier);
+    applyAimNoise(aimPoint, entity.position, visibility, aimTarget.position.distanceTo(entity.position), difficulty.aiAimErrorMultiplier, rng);
   }
 
-  const weaponInput = computeWeaponInput(entity, ai, aimTarget, match, world, difficulty, dt);
-  return { moveDir, dashRequested, aimPoint, weaponInput };
+  const weaponInput = computeWeaponInput(entity, ai, aimTarget, match, world, difficulty, dt, rng);
+
+  const throwDecision = decideThrowableUse({ self: entity, world, match, target: aimTarget, goal, rng });
+  const throwRequested = throwDecision.throwRequested && ai.throwableCooldown <= 0;
+  const throwAimPoint = throwRequested ? throwDecision.aimPoint : null;
+  if (throwRequested) ai.throwableCooldown = 6;
+
+  return { moveDir, dashRequested, aimPoint, weaponInput, throwRequested, throwAimPoint };
 }
 
 function pickGoal(entity: Entity, world: World, match: MatchRuntime, aimTarget: Entity | null): THREE.Vector3 | null {
-  const arenaObj = world.arena?.objectives;
+  const pickupGoal = pickHealthPickupGoal(entity, world);
+  if (pickupGoal) return pickupGoal;
 
-  if (match.state.modeId === 'siege') {
-    const cp = arenaObj?.siege?.capturePoint;
-    if (cp) return new THREE.Vector3(cp.x, entity.position.y, cp.z);
-  }
-
-  if (match.state.modeId === 'ctf') {
-    const ctf = arenaObj?.ctf;
-    if (!ctf) return aimTarget?.position ?? null;
-
-    if (entity.team !== 'red' && entity.team !== 'blue') return aimTarget?.position ?? null;
-
-    if (entity.carryingFlag) {
-      const base = entity.team === 'red' ? ctf.redBase : ctf.blueBase;
-      return new THREE.Vector3(base.x, entity.position.y, base.z);
-    }
-
-    const enemyTeam = entity.team === 'red' ? 'blue' : 'red';
-    const flags = match.state.flags;
-    const enemyFlag = enemyTeam === 'red' ? flags.red : flags.blue;
-    return new THREE.Vector3(enemyFlag.pos.x, entity.position.y, enemyFlag.pos.z);
-  }
-
+  if (match.state.modeId === 'siege') return pickSiegeGoal(entity, world);
+  if (match.state.modeId === 'ctf') return pickCtfGoal(entity, world, match, aimTarget);
   return aimTarget ? aimTarget.position : null;
 }
 
-function pickAimTarget(entity: Entity, ai: AiControllerState, world: World, match: MatchRuntime): Entity | null {
+function pickAimTarget(entity: Entity, ai: AiControllerState, world: World): Entity | null {
   ai.nextDecisionTime = Math.max(0, ai.nextDecisionTime - 1);
   if (ai.nextDecisionTime <= 0) {
     ai.nextDecisionTime = 30;
     ai.strafeSign = ai.strafeSign === 1 ? -1 : 1;
   }
 
-  const enemies = world.entities.filter((e) => !e.eliminated && e.team !== entity.team);
-  if (enemies.length === 0) return null;
-
-  let best: Entity | null = null;
-  let bestDistSq = Number.POSITIVE_INFINITY;
-  for (const e of enemies) {
-    const dx = e.position.x - entity.position.x;
-    const dz = e.position.z - entity.position.z;
-    const distSq = dx * dx + dz * dz;
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      best = e;
-    }
-  }
-
-  if (match.state.modeId === 'ctf' && entity.team !== 'red' && entity.team !== 'blue') return best;
-
+  const best = pickNearestEnemy(entity, world.entities);
   ai.targetId = best?.id ?? null;
   return best;
 }
@@ -128,7 +134,8 @@ function computeWeaponInput(
   match: MatchRuntime,
   world: World,
   difficulty: DifficultyConfig,
-  dt: number
+  dt: number,
+  rng: Rng
 ): WeaponFrameInput {
   void dt;
 
@@ -183,7 +190,7 @@ function computeWeaponInput(
   }
 
   const confidence = Math.max(0, Math.min(1, visibility * 1.1 * difficulty.aiFireConfidenceMultiplier));
-  const shouldFire = target ? Math.random() < confidence : false;
+  const shouldFire = target ? rng.nextFloat() < confidence : false;
 
   if (cfg.auto) {
     ai.fireDown = shouldFire;
@@ -235,18 +242,44 @@ function applyAimNoise(
   shooterPos: THREE.Vector3,
   visibility: number,
   distance: number,
-  aimErrorMultiplier: number
+  aimErrorMultiplier: number,
+  rng: Rng
 ): void {
   const t = Math.max(0, Math.min(1, distance / 30));
   const base = 0.08 + t * 0.45;
   const penalty = 1 - visibility;
   const error = base * (0.35 + penalty * 2.4) * aimErrorMultiplier;
 
-  const nx = (Math.random() - 0.5) * 2 * error;
-  const nz = (Math.random() - 0.5) * 2 * error;
+  const nx = (rng.nextFloat() - 0.5) * 2 * error;
+  const nz = (rng.nextFloat() - 0.5) * 2 * error;
 
   aimPoint.x += nx;
   aimPoint.z += nz;
 
   void shooterPos;
+}
+
+function resolveMoveGoal(entity: Entity, ai: AiControllerState, nav: NavGrid | null, goal: THREE.Vector3 | null): THREE.Vector3 | null {
+  if (!goal) {
+    ai.path = [];
+    ai.pathIndex = 0;
+    return null;
+  }
+  if (!nav) return goal;
+
+  if (ai.nextPathRecalcTime <= 0 || ai.path.length === 0) {
+    ai.path = findPath(nav, entity.position, goal);
+    ai.pathIndex = 0;
+    ai.nextPathRecalcTime = 0.65;
+  }
+
+  while (ai.pathIndex < ai.path.length - 1) {
+    const p = ai.path[ai.pathIndex];
+    const dx = p.x - entity.position.x;
+    const dz = p.z - entity.position.z;
+    if (dx * dx + dz * dz > 0.9 * 0.9) break;
+    ai.pathIndex += 1;
+  }
+
+  return ai.path[Math.min(ai.pathIndex, ai.path.length - 1)] ?? goal;
 }

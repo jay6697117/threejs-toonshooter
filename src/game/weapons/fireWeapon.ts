@@ -3,6 +3,7 @@ import { WEAPON_CONFIGS } from '../config/weapons';
 import type { WeaponId } from '../config/ids';
 import type { Cover } from '../arena/cover';
 import type { Entity } from '../entities/entityBase';
+import type { Rng } from '../core/rng';
 import { dealDamage } from '../combat/damage';
 import { applyDamageToCover } from '../combat/coverDamage';
 import { raycast, raycastAll } from '../combat/raycast';
@@ -25,10 +26,11 @@ export function fireWeapon(
   weaponId: WeaponId,
   aimPoint: THREE.Vector3,
   context: FireContext,
-  options?: { chargeRatio?: number }
+  options?: { chargeRatio?: number; rng?: Rng }
 ): FireResult {
   const cfg = WEAPON_CONFIGS[weaponId];
   const chargeRatio = options?.chargeRatio ?? 1;
+  const rng = options?.rng;
 
   const muzzle = attacker.position.clone();
   muzzle.y += 1.1;
@@ -50,7 +52,7 @@ export function fireWeapon(
 
     for (let shot = 0; shot < shotsPerTrigger; shot += 1) {
       for (let pellet = 0; pellet < pellets; pellet += 1) {
-        const dir = spread > 0 ? applySpread(direction, spread) : direction;
+        const dir = spread > 0 ? applySpread(direction, spread, rng) : direction;
 
         if (cfg.special.kind === 'penetrate') {
           const maxEntityHits = 1 + cfg.special.maxPenetrations;
@@ -66,10 +68,11 @@ export function fireWeapon(
           let entityHits = 0;
           for (const hit of hits) {
             if (hit.type === 'cover') {
-              applyDamageToCover(context.scene, context.entities, hit.cover, baseDamage, {
+              applyDamageToCover(context.scene, context.entities, context.covers, hit.cover, baseDamage, {
                 ignite: weaponHasBurn(cfg),
                 attackerId: attacker.id,
-                attackerTeam: attacker.team
+                attackerTeam: attacker.team,
+                rng
               });
               if (overall === 'none') overall = 'cover';
               break;
@@ -83,24 +86,25 @@ export function fireWeapon(
           continue;
         }
 
-        const hit = raycast({
-          origin: muzzle,
-          direction: dir,
-          maxDistance: range,
-          entities: context.entities,
-          covers: context.covers,
-          ignoreTeam: attacker.team
-        });
+          const hit = raycast({
+            origin: muzzle,
+            direction: dir,
+            maxDistance: range,
+            entities: context.entities,
+            covers: context.covers,
+            ignoreTeam: attacker.team
+          });
 
         if (!hit) continue;
         if (hit.type === 'entity') {
           applyWeaponHitToEntity(attacker, cfg.id, hit.entity, dir, { damageAmount: baseDamage, chargeRatio });
           overall = 'entity';
         } else if (overall === 'none') {
-          applyDamageToCover(context.scene, context.entities, hit.cover, baseDamage, {
+          applyDamageToCover(context.scene, context.entities, context.covers, hit.cover, baseDamage, {
             ignite: weaponHasBurn(cfg),
             attackerId: attacker.id,
-            attackerTeam: attacker.team
+            attackerTeam: attacker.team,
+            rng
           });
           overall = 'cover';
         }
@@ -110,7 +114,8 @@ export function fireWeapon(
     return { type: 'hitscan', hit: overall, ammoConsumed };
   }
 
-  const projectileId = `${attacker.id}_${weaponId}_${Math.floor(Math.random() * 1e9)}`;
+  const idSuffix = rng ? rng.nextUint32().toString(36) : String(Math.floor(Math.random() * 1e9));
+  const projectileId = `${attacker.id}_${weaponId}_${idSuffix}`;
   const { kind, motion, speed } = cfg.trajectory;
   void kind;
 
@@ -216,10 +221,12 @@ function resolveDamage(dmg: { kind: 'flat'; amount: number; pellets?: number } |
   return dmg.min + (dmg.max - dmg.min) * t;
 }
 
-function applySpread(direction: THREE.Vector3, spread: number): THREE.Vector3 {
+function applySpread(direction: THREE.Vector3, spread: number, rng: Rng | undefined): THREE.Vector3 {
   const d = direction.clone();
-  d.x += (Math.random() - 0.5) * spread;
-  d.z += (Math.random() - 0.5) * spread;
+  const rx = rng ? rng.nextFloat() : Math.random();
+  const rz = rng ? rng.nextFloat() : Math.random();
+  d.x += (rx - 0.5) * spread;
+  d.z += (rz - 0.5) * spread;
   if (d.lengthSq() > 1e-6) d.normalize();
   return d;
 }

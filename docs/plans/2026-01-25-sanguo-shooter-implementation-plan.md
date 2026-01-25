@@ -290,7 +290,7 @@ npm run preview
   - [x] ranged（first playable pass）: `strongBow` `heavyCrossbow` `siegeCrossbow` `poisonCrossbow`
   - [x] special（first playable pass）: `zhugeRepeater` `grapplingHook` `thunderBomb`
   - [ ] per-weapon smoke checklist（ammo/reload/charge/special + edge cases）
-  - [ ] special acquisition gating（airdrop/treasure only）
+  - [x] special acquisition gating（airdrop/treasure only；当前以 timed airdrop 为主，treasure 可后补）
 
 **Done Criteria：**
 - 15 把武器“数值、弹药、换弹、蓄力、状态效果、特殊机制”都可跑通。
@@ -308,8 +308,8 @@ npm run preview
   - [x] explosive（first playable pass）: `thunderGrenade` `gunpowderPack` `smokeBomb`
   - [x] traps（first playable pass）: `tripWire` `caltrops` `bearTrap`
   - [x] utility（first playable pass）: `limePowder` `oilPot` `poisonSmoke`
-- [ ] 规则联动：
-  - [ ] smoke/poison smoke 影响 LoS/AI 感知（先对 AI 命中率做降级也可）
+- [x] 规则联动：
+  - [x] smoke/poison smoke 影响 LoS/AI 感知（已用于 AI 命中率/开火置信度降级）
   - [x] oil ignitable（placeholder：燃烧单位接触油区则点燃）
 
 ---
@@ -319,10 +319,11 @@ npm run preview
 **目标：** 10 个场景全部可跑，且每个场景的“核心机制”存在并可验证。
 
 **Checklist：**
-- [ ] `arena/arenaManager.ts`：load/unload + per-scene preload groups
-- [ ] `arena/cover.ts`：destructible/burnable/pushable/climbable/toggleable
-- [ ] `arena/scenes/*.ts`：10 scene configs（spawn points, cover placements, events）
-- [ ] `debug/arenaDebug.ts`：展示 AABB、spawn、nav nodes、事件触发范围
+- [x] `arena/arenaManager.ts`：load/unload（`clearArena`）+ scene events/zones（placeholder 机制）
+- [ ] `arena/arenaManager.ts`：per-scene preload groups（assets integration，placeholder-first）
+- [ ] `arena/cover.ts`：destructible/burnable/pushable/climbable/toggleable（climbable 仍待补齐）
+- [x] `arena/sceneDefinitions.ts`：10 scene defs（spawn points, cover placements, events）
+- [x] `debug/arenaDebug.ts`：展示 AABB、spawn、objectives
 
 ---
 
@@ -331,11 +332,11 @@ npm run preview
 **目标：** 4 种模式胜负逻辑完整，UI 可用，AI 有目标。
 
 **Checklist：**
-- [ ] `modes/modeManager.ts`：统一 match lifecycle
-- [ ] `modes/duel.ts`：best of 5 + sudden death
-- [ ] `modes/ffa.ts`：4 players + 3 lives + time tiebreak
-- [ ] `modes/siege.ts`：attack/defend + capture progress + defender respawns
-- [ ] `modes/ctf.ts`：flag carrier restrictions + score to win + return rules
+- [x] `modes/modeManager.ts`：统一 match lifecycle
+- [x] `modes/modeManager.ts`：duel（best of 5 + sudden death）
+- [x] `modes/modeManager.ts`：ffa（4 players + 3 lives + time tiebreak）
+- [x] `modes/modeManager.ts`：siege（attack/defend + capture progress + defender respawns）
+- [x] `modes/modeManager.ts`：ctf（flag carrier restrictions + score to win + return rules）
 
 ---
 
@@ -344,11 +345,11 @@ npm run preview
 **目标：** AI 从“能走能打”升级到“会用掩体、会用投掷物、会做目标”。
 
 **Checklist：**
-- [ ] `entities/ai.ts`：think loop + steering + shooting intent
-- [ ] `arena/navGraph.ts`：per-scene nodes + A* + dynamic obstacle updates（可先降级）
-- [ ] `ai/behaviors/*.ts`：cover/pickup/evade/attack/flank
-- [ ] `ai/modeObjectives/*.ts`：siege/ctf objective logic
-- [ ] `config/difficulty.ts`：easy/normal/hard tuning
+- [x] `entities/aiController.ts`：think loop + steering + shooting intent（placeholder）
+- [x] `arena/navGraph.ts`：grid-based A* + dynamic obstacle sampling（covers rebuild）
+- [x] `ai/behaviors/*.ts`：targeting/pickups/throwables（placeholder）
+- [x] `ai/modeObjectives/*.ts`：siege/ctf objective logic（placeholder）
+- [x] `config/difficulty.ts`：easy/normal/hard tuning
 
 ---
 
@@ -357,9 +358,9 @@ npm run preview
 **目标：** UI 只读订阅状态，输入走 command，不直接改仿真数据。
 
 **Checklist：**
-- [ ] `ui/menu.ts`：mode/scene/difficulty/character selection + settings
-- [ ] `ui/hud.ts`：hp/ammo/throwables/dash cooldown/crosshair
-- [ ] `ui/overlays.ts`：pause/match end/scoreboard/killfeed
+- [x] `ui/menu.ts`：mode/scene/difficulty/character selection（URL params）
+- [x] `ui/hud.ts`：hp/ammo/throwables/dash/status/crosshair
+- [x] `ui/overlays.ts`：pause/match end/scoreboard/killfeed
 
 ---
 

@@ -24,6 +24,8 @@ export type UiEntityRow = {
   deaths: number;
   score: number;
   carryingFlag: 'red' | 'blue' | null;
+  lastAttackerId: string | null;
+  lastWeaponId: WeaponId | null;
 };
 
 export type UiHumanState = UiEntityRow & {

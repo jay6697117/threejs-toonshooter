@@ -1,3 +1,5 @@
+import { SFX_MAP, type SfxId } from '../audio/sfxMap';
+
 export type AudioBuses = {
   master: GainNode;
   sfx: GainNode;
@@ -68,10 +70,14 @@ export class AudioManager {
     osc.start(now);
     osc.stop(now + duration + 0.02);
   }
+
+  playSfx(id: SfxId): void {
+    const cfg = SFX_MAP[id];
+    this.playBeep({ frequencyHz: cfg.frequencyHz, durationSeconds: cfg.durationSeconds, bus: cfg.bus });
+  }
 }
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
 }
-

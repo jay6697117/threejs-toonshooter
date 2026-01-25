@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import type { ModeId } from '../config/ids';
+import type { CharacterId, ModeId } from '../config/ids';
 import type { Assets } from '../core/assets';
 import type { World } from '../core/world';
+import { CHARACTER_CONFIGS } from '../config/characters';
 import { createNpcEntity } from '../entities/npc';
 import { createPlayerEntity } from '../entities/player';
 import type { Entity, TeamId } from '../entities/entityBase';
@@ -20,9 +21,10 @@ export function spawnPlayersForMode(
   world: World,
   assets: Assets,
   modeId: ModeId,
-  options?: { humanId?: string }
+  options?: { humanId?: string; humanCharacterId?: CharacterId }
 ): { human: Entity; entities: Entity[] } {
   const humanId = options?.humanId ?? 'p1';
+  const humanCharacterId = options?.humanCharacterId;
   if (!world.arena) throw new Error('World arena is not loaded');
 
   for (const entity of world.entities) {
@@ -33,15 +35,15 @@ export function spawnPlayersForMode(
   const entities: Entity[] = [];
 
   if (modeId === 'duel') {
-    entities.push(createHuman(humanId, 'p1', world, assets));
+    entities.push(createHuman(humanId, 'p1', world, assets, humanCharacterId));
     entities.push(createBot('p2', 'p2', world, assets));
   } else if (modeId === 'ffa') {
-    entities.push(createHuman(humanId, 'p1', world, assets));
+    entities.push(createHuman(humanId, 'p1', world, assets, humanCharacterId));
     entities.push(createBot('p2', 'p2', world, assets));
     entities.push(createBot('p3', 'p3', world, assets));
     entities.push(createBot('p4', 'p4', world, assets));
   } else {
-    entities.push(createHuman(humanId, 'red', world, assets));
+    entities.push(createHuman(humanId, 'red', world, assets, humanCharacterId));
     entities.push(createBot('p2', 'red', world, assets));
     entities.push(createBot('p3', 'blue', world, assets));
     entities.push(createBot('p4', 'blue', world, assets));
@@ -56,14 +58,15 @@ export function spawnPlayersForMode(
   return { human, entities };
 }
 
-function createHuman(id: string, team: TeamId, world: World, assets: Assets): Entity {
+function createHuman(id: string, team: TeamId, world: World, assets: Assets, characterId?: CharacterId): Entity {
   const startPos = pickSpawn(world, id, team);
+  const charColor = characterId ? CHARACTER_CONFIGS[characterId].primaryColor : undefined;
   return createPlayerEntity({
     id,
     team,
-    color: COLORS[team] ?? COLORS[id] ?? 0xffffff,
+    color: charColor ?? COLORS[team] ?? COLORS[id] ?? 0xffffff,
     startPos,
-    mesh: assets.createPlaceholderMesh({ color: COLORS[team] ?? COLORS[id] ?? 0xffffff })
+    mesh: assets.createPlaceholderMesh({ color: charColor ?? COLORS[team] ?? COLORS[id] ?? 0xffffff })
   });
 }
 
@@ -94,4 +97,3 @@ function pickSpawn(world: World, id: string, team: TeamId): THREE.Vector3 {
   const idx = parseInt(id.replace('p', ''), 10) - 1;
   return (arena.ffaSpawns[idx % arena.ffaSpawns.length] ?? arena.ffaSpawns[0]).clone();
 }
-

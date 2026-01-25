@@ -194,6 +194,7 @@ function hitEntities(p: Projectile, entities: Entity[]): ProjectileHit | null {
 function hitCovers(p: Projectile, covers: Cover[]): ProjectileHit | null {
   for (const c of covers) {
     if (!c.active) continue;
+    if (c.blocksProjectiles === false) continue;
     const expanded = c.box.clone().expandByScalar(p.radius);
     if (expanded.containsPoint(p.position)) {
       return { type: 'cover', cover: c, point: p.position.clone() };

@@ -13,6 +13,9 @@ export type ArenaCoverDef = {
   pos: THREE.Vector3;
   color?: number;
   hp?: number;
+  pushable?: boolean;
+  toggleable?: boolean;
+  blocksProjectiles?: boolean;
   burnable?: boolean;
   burnSeconds?: number;
   burnRadiusMeters?: number;
@@ -22,6 +25,12 @@ export type ArenaCoverDef = {
     damage: number;
     statusEffects?: Array<{ id: 'slow' | 'burn' | 'blind'; durationSeconds?: number }>;
     knockbackDistance?: number;
+  };
+  onDestroyedSpawnCover?: {
+    size: THREE.Vector3;
+    hp: number;
+    color?: number;
+    timeLeftSeconds?: number;
   };
 };
 
@@ -122,9 +131,17 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
         size: new THREE.Vector3(1.6, 0.9, 4.0),
         pos: v(0, 0.45, 0),
         color: 0x8b5a2b,
-        hp: 50
+        hp: 50,
+        onDestroyedSpawnCover: { size: new THREE.Vector3(2.4, 1.1, 4.6), hp: 9999, color: 0x6b7280 }
       },
-      { id: 'cb_tree', size: new THREE.Vector3(0.9, 1.4, 0.9), pos: v(0, 0.7, 6.2), color: 0x2f4f2f, hp: 20 }
+      {
+        id: 'cb_tree',
+        size: new THREE.Vector3(0.9, 1.4, 0.9),
+        pos: v(0, 0.7, 6.2),
+        color: 0x2f4f2f,
+        hp: 20,
+        onDestroyedSpawnCover: { size: new THREE.Vector3(4.2, 0.7, 0.9), hp: 9999, color: 0x8b5a2b, timeLeftSeconds: 7 }
+      }
     ],
     pickups: [
       { kind: 'weapon', id: 'cb_weapon', weaponId: 'heavyCrossbow', pos: v(0, 0.2, -6) },
@@ -155,7 +172,7 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
         hp: 25,
         onDestroyedExplosion: { radiusMeters: 3.2, damage: 10, statusEffects: [{ id: 'slow', durationSeconds: 2.0 }] }
       },
-      { id: 'ly_cart', size: new THREE.Vector3(2.2, 1.0, 1.2), pos: v(4.8, 0.5, 0), color: 0x8b5a2b, hp: 60 }
+      { id: 'ly_cart', size: new THREE.Vector3(2.2, 1.0, 1.2), pos: v(4.8, 0.5, 0), color: 0x8b5a2b, hp: 60, pushable: true }
     ],
     pickups: [
       { kind: 'weapon', id: 'ly_weapon', weaponId: 'repeatingCrossbow', pos: v(0, 0.2, 0) },
@@ -176,8 +193,30 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     redSpawns: [v(-11, 0.95, -3), v(-11, 0.95, 3), v(-8, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -3), v(11, 0.95, 3), v(8, 0.95, 0)],
     covers: [
-      { id: 'cb_barrel_a', size: new THREE.Vector3(1.0, 1.0, 1.0), pos: v(-4.2, 0.5, -3.2), color: 0x6b7280, hp: 30 },
-      { id: 'cb_barrel_b', size: new THREE.Vector3(1.0, 1.0, 1.0), pos: v(4.2, 0.5, 3.2), color: 0x6b7280, hp: 30 }
+      {
+        id: 'cb_barrel_a',
+        size: new THREE.Vector3(1.0, 1.0, 1.0),
+        pos: v(-4.2, 0.5, -3.2),
+        color: 0x6b7280,
+        hp: 30,
+        burnable: true,
+        burnSeconds: 8,
+        burnRadiusMeters: 4.2,
+        burnDamagePerSecond: 8,
+        onDestroyedExplosion: { radiusMeters: 3.4, damage: 18, statusEffects: [{ id: 'burn', durationSeconds: 3.0 }] }
+      },
+      {
+        id: 'cb_barrel_b',
+        size: new THREE.Vector3(1.0, 1.0, 1.0),
+        pos: v(4.2, 0.5, 3.2),
+        color: 0x6b7280,
+        hp: 30,
+        burnable: true,
+        burnSeconds: 8,
+        burnRadiusMeters: 4.2,
+        burnDamagePerSecond: 8,
+        onDestroyedExplosion: { radiusMeters: 3.4, damage: 18, statusEffects: [{ id: 'burn', durationSeconds: 3.0 }] }
+      }
     ],
     pickups: [{ kind: 'weapon', id: 'cs_weapon', weaponId: 'fireArrow', pos: v(0, 0.2, 0) }],
     zones: [{ kind: 'rect', id: 'cs_water', minX: -3.2, maxX: 3.2, minZ: -9, maxZ: 9, effect: 'waterSlow' }],
@@ -196,7 +235,7 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     redSpawns: [v(-11, 0.95, -4), v(-11, 0.95, 4), v(-9, 0.95, 0)],
     blueSpawns: [v(11, 0.95, -4), v(11, 0.95, 4), v(9, 0.95, 0)],
     covers: [
-      { id: 'hp_gate', size: new THREE.Vector3(1.8, 1.6, 0.6), pos: v(0, 0.8, 0), color: 0x6b4f2a, hp: 80 },
+      { id: 'hp_gate', size: new THREE.Vector3(1.8, 1.6, 0.6), pos: v(0, 0.8, 0), color: 0x6b4f2a, hp: 80, toggleable: true },
       { id: 'hp_wall_a', size: new THREE.Vector3(3.6, 1.2, 0.7), pos: v(-4.2, 0.6, 0), color: 0x4b5563, hp: 9999 },
       { id: 'hp_wall_b', size: new THREE.Vector3(3.6, 1.2, 0.7), pos: v(4.2, 0.6, 0), color: 0x4b5563, hp: 9999 }
     ],
@@ -248,7 +287,8 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     covers: [
       { id: 'tq_wall_a', size: new THREE.Vector3(6.0, 1.2, 0.7), pos: v(0, 0.6, 0), color: 0x374151, hp: 9999 },
       { id: 'tq_pillar_a', size: new THREE.Vector3(1.0, 1.6, 1.0), pos: v(-6.2, 0.8, -3.2), color: 0x6b7280, hp: 9999 },
-      { id: 'tq_pillar_b', size: new THREE.Vector3(1.0, 1.6, 1.0), pos: v(6.2, 0.8, 3.2), color: 0x6b7280, hp: 9999 }
+      { id: 'tq_pillar_b', size: new THREE.Vector3(1.0, 1.6, 1.0), pos: v(6.2, 0.8, 3.2), color: 0x6b7280, hp: 9999 },
+      { id: 'tq_screen', size: new THREE.Vector3(2.8, 1.2, 0.25), pos: v(0, 0.6, 4.0), color: 0x9aa5b4, hp: 9999, blocksProjectiles: false }
     ],
     pickups: [{ kind: 'weapon', id: 'tq_weapon', weaponId: 'poisonCrossbow', pos: v(0, 0.2, -6) }],
     zones: [
@@ -319,7 +359,7 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
         onDestroyedExplosion: { radiusMeters: 3.0, damage: 0, statusEffects: [{ id: 'blind', durationSeconds: 3.0 }] }
       }
     ],
-    pickups: [{ kind: 'weapon', id: 'xa_weapon', weaponId: 'zhugeRepeater', pos: v(0, 0.2, 6) }],
+    pickups: [{ kind: 'weapon', id: 'xa_weapon', weaponId: 'heavyCrossbow', pos: v(0, 0.2, 6) }],
     zones: [{ kind: 'circle', id: 'xa_center', x: 0, z: 0, radius: 3.2, effect: 'centerDamageBuff' }],
     objectives: {
       siege: { capturePoint: v(0, 0, 0), captureRadius: 3.0 },
@@ -327,4 +367,3 @@ export const ARENA_SCENES: Record<SceneId, ArenaSceneDef> = {
     }
   }
 };
-
