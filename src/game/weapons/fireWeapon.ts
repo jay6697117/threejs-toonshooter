@@ -4,6 +4,7 @@ import type { WeaponId } from '../config/ids';
 import type { Cover } from '../arena/cover';
 import type { Entity } from '../entities/entityBase';
 import { dealDamage } from '../combat/damage';
+import { applyDamageToCover } from '../combat/coverDamage';
 import { raycast, raycastAll } from '../combat/raycast';
 import { applyStatus } from '../combat/statusEffects';
 import type { Projectile } from './projectile';
@@ -38,7 +39,7 @@ export function fireWeapon(
 
   if (cfg.trajectory.kind === 'hitscan') {
     const range = resolveRangeMeters(cfg.rangeMeters, chargeRatio);
-    const baseDamage = resolveDamage(cfg.damage, chargeRatio);
+    const baseDamage = resolveDamage(cfg.damage, chargeRatio) * (attacker.damageDealtMultiplier ?? 1);
 
     const shotsPerTrigger = cfg.special.kind === 'doubleShot' ? 2 : 1;
     const ammoConsumed = cfg.special.kind === 'doubleShot' ? 2 : 1;
@@ -65,6 +66,11 @@ export function fireWeapon(
           let entityHits = 0;
           for (const hit of hits) {
             if (hit.type === 'cover') {
+              applyDamageToCover(context.scene, context.entities, hit.cover, baseDamage, {
+                ignite: weaponHasBurn(cfg),
+                attackerId: attacker.id,
+                attackerTeam: attacker.team
+              });
               if (overall === 'none') overall = 'cover';
               break;
             }
@@ -91,6 +97,11 @@ export function fireWeapon(
           applyWeaponHitToEntity(attacker, cfg.id, hit.entity, dir, { damageAmount: baseDamage, chargeRatio });
           overall = 'entity';
         } else if (overall === 'none') {
+          applyDamageToCover(context.scene, context.entities, hit.cover, baseDamage, {
+            ignite: weaponHasBurn(cfg),
+            attackerId: attacker.id,
+            attackerTeam: attacker.team
+          });
           overall = 'cover';
         }
       }
@@ -125,7 +136,7 @@ export function fireWeapon(
     velocity,
     speed,
     radius: 0.12,
-    damageAmount: resolveDamage(cfg.damage, chargeRatio),
+    damageAmount: resolveDamage(cfg.damage, chargeRatio) * (attacker.damageDealtMultiplier ?? 1),
     timeLeft: 4.5,
     bouncesLeft: cfg.special.kind === 'bouncyExplosion' ? cfg.special.maxBounces : undefined,
     origin: projKind === 'returning' ? attacker.position.clone() : undefined,
@@ -211,6 +222,10 @@ function applySpread(direction: THREE.Vector3, spread: number): THREE.Vector3 {
   d.z += (Math.random() - 0.5) * spread;
   if (d.lengthSq() > 1e-6) d.normalize();
   return d;
+}
+
+function weaponHasBurn(cfg: { onHitEffects?: Array<{ kind: string; id?: string }> }): boolean {
+  return Boolean(cfg.onHitEffects?.some((eff) => eff.kind === 'status' && eff.id === 'burn'));
 }
 
 function resolveOnHitDurationSeconds(

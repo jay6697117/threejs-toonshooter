@@ -3,6 +3,13 @@ import { computeAabbFromBox3, type Aabb2 } from '../combat/collision';
 
 export type CoverId = string;
 
+export type CoverExplosion = {
+  radiusMeters: number;
+  damage: number;
+  statusEffects?: Array<{ id: 'slow' | 'burn' | 'blind'; durationSeconds?: number }>;
+  knockbackDistance?: number;
+};
+
 export type Cover = {
   id: CoverId;
   mesh: THREE.Object3D;
@@ -13,6 +20,12 @@ export type Cover = {
   destructible: boolean;
   hp: number;
   maxHp: number;
+  burnable?: boolean;
+  burnTimeLeftSeconds?: number;
+  burnSeconds?: number;
+  burnRadiusMeters?: number;
+  burnDamagePerSecond?: number;
+  onDestroyedExplosion?: CoverExplosion;
 };
 
 export function createBoxCover(options: {
@@ -41,7 +54,9 @@ export function createBoxCover(options: {
     active: true,
     destructible: true,
     hp,
-    maxHp: hp
+    maxHp: hp,
+    burnable: false,
+    burnTimeLeftSeconds: 0
   };
 }
 

@@ -1,11 +1,15 @@
 import * as THREE from 'three';
-import { createBoxCover, type Cover } from '../arena/cover';
-import { createHealthPickup, createThrowablePickup, createWeaponPickup, updatePickups } from '../arena/pickups';
+import { createBoxCover } from '../arena/cover';
+import { updatePickups } from '../arena/pickups';
+import { loadArena, updateArena } from '../arena/arenaManager';
 import { applyExplosion } from '../combat/areaDamage';
-import { clampToBounds, resolveCircleVsAabb } from '../combat/collision';
+import { clampToBounds, resolveCircleVsAabb, resolveCircleVsCircle } from '../combat/collision';
+import { applyDamageToCover } from '../combat/coverDamage';
 import { dealDamage } from '../combat/damage';
 import { updateStatusEffects } from '../combat/statusEffects';
 import { GAME_CONFIG } from '../config/game';
+import { MODE_CONFIGS } from '../config/modes';
+import { MODE_IDS, SCENE_IDS, type ModeId, type SceneId } from '../config/ids';
 import { WEAPON_CONFIGS } from '../config/weapons';
 import { AudioManager } from '../core/audio';
 import { Assets } from '../core/assets';
@@ -17,8 +21,9 @@ import { resizeRendererToDisplaySize } from '../core/resize';
 import { loadSettings, saveSettings } from '../core/storage';
 import { createWorld } from '../core/world';
 import { syncVisual } from '../entities/entityBase';
-import { createNpcEntity } from '../entities/npc';
-import { createPlayerEntity, updatePlayer } from '../entities/player';
+import { updatePlayer } from '../entities/player';
+import { createMatchRuntime, initializeMatchPlayers, updateMatch, applyRespawns } from '../modes/modeManager';
+import { spawnPlayersForMode } from '../modes/spawnPlayers';
 import { applyWeaponHitToEntity } from '../weapons/fireWeapon';
 import { type Projectile, updateProjectiles } from '../weapons/projectile';
 import { updateWeapons } from '../weapons/weaponManager';
@@ -78,47 +83,13 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
   dir.shadow.camera.bottom = -12;
   scene.add(dir);
 
-  const groundGeo = new THREE.PlaneGeometry(24, 18);
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x263143, roughness: 0.95, metalness: 0.0 });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+  const { modeId, sceneId } = resolveInitialMatchFromUrl();
+  const arenaScale = modeId === 'ffa' ? MODE_CONFIGS.ffa.arenaScale : 1;
+  loadArena(scene, world, modeId, sceneId, { arenaScale });
 
-  const player = createPlayerEntity({
-    id: 'p1',
-    team: 'p1',
-    color: 0x45d16e,
-    startPos: new THREE.Vector3(0, 0.95, 0),
-    mesh: assets.createPlaceholderMesh({ color: 0x45d16e })
-  });
-  scene.add(player.mesh);
-  world.entities.push(player);
-
-  const enemy = createNpcEntity({
-    id: 'p2',
-    team: 'p2',
-    color: 0xe84c4c,
-    startPos: new THREE.Vector3(5, 0.95, 0),
-    mesh: assets.createPlaceholderMesh({ color: 0xe84c4c })
-  });
-  scene.add(enemy.mesh);
-  world.entities.push(enemy);
-
-  const covers: Cover[] = [
-    createBoxCover({ id: 'coverA', size: new THREE.Vector3(2.4, 1.2, 1.2), pos: new THREE.Vector3(-3.2, 0.6, 0) }),
-    createBoxCover({ id: 'coverB', size: new THREE.Vector3(2.0, 1.0, 1.6), pos: new THREE.Vector3(3.6, 0.5, -1.8) })
-  ];
-  for (const cover of covers) scene.add(cover.mesh);
-  world.covers.push(...covers);
-
-  const pickups = [
-    createWeaponPickup({ id: 'pickup_weapon_a', weaponId: 'boomerangBlade', pos: new THREE.Vector3(-6, 0.2, -3) }),
-    createThrowablePickup({ id: 'pickup_throw_a', throwableId: 'smokeBomb', pos: new THREE.Vector3(0, 0.2, 4) }),
-    createHealthPickup({ id: 'pickup_health_a', amount: 35, pos: new THREE.Vector3(6, 0.2, 2) })
-  ];
-  for (const pickup of pickups) scene.add(pickup.mesh);
-  world.pickups.push(...pickups);
+  const match = createMatchRuntime(modeId, 'p1');
+  const { human } = spawnPlayersForMode(scene, world, assets, modeId, { humanId: match.humanId });
+  initializeMatchPlayers(world, match);
 
   const picker = new GroundPicker();
   picker.setGroundY(0);
@@ -149,10 +120,10 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
 
     dashRequested = dashRequested || input.wasPressed('dash');
 
-    if (input.wasPressed('weaponSlot1')) player.activeWeaponSlot = 0;
-    if (input.wasPressed('weaponSlot2')) player.activeWeaponSlot = 1;
-    if (input.wasPressed('weaponSlot3')) player.activeWeaponSlot = 2;
-    if (input.wasPressed('aimSecondary')) cycleActiveThrowableSlot(player);
+    if (input.wasPressed('weaponSlot1')) human.activeWeaponSlot = 0;
+    if (input.wasPressed('weaponSlot2')) human.activeWeaponSlot = 1;
+    if (input.wasPressed('weaponSlot3')) human.activeWeaponSlot = 2;
+    if (input.wasPressed('aimSecondary')) cycleActiveThrowableSlot(human);
 
     const pointer = input.getPointerNdc();
     const hit = pointer.insideCanvas ? picker.pick(camera, pointer.x, pointer.y) : null;
@@ -181,11 +152,11 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
     }
 
     const aimPoint = frameAimPoint;
-    updatePlayer(player, input, aimPoint, fixedDt, dashRequested);
+    updatePlayer(human, input, aimPoint, fixedDt, dashRequested);
     dashRequested = false;
 
     const weaponResult = updateWeapons(
-      player,
+      human,
       {
         fireDown: input.isDown('fire'),
         firePressed: frameFirePressed,
@@ -204,7 +175,7 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
     }
 
     if (frameThrowPressed) {
-      tryUseActiveThrowable(player, aimPoint, {
+      tryUseActiveThrowable(human, aimPoint, {
         scene,
         entities: world.entities,
         throwableProjectiles: world.throwableProjectiles,
@@ -228,6 +199,8 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
       world.timeSeconds
     );
 
+    updateArena(world, fixedDt);
+
     for (const cover of world.covers) {
       if (!cover.active) continue;
       if (cover.timeLeftSeconds === undefined) continue;
@@ -238,10 +211,23 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
       }
     }
 
-    clampToBounds(player.position, GAME_CONFIG.arena.bounds, player.radius);
-    for (const cover of world.covers) {
-      if (!cover.active) continue;
-      resolveCircleVsAabb(player.position, player.radius, cover.aabb);
+    const bounds = world.arena?.bounds ?? GAME_CONFIG.arena.bounds;
+    for (const entity of world.entities) {
+      if (entity.eliminated) continue;
+      clampToBounds(entity.position, bounds, entity.radius);
+      for (const cover of world.covers) {
+        if (!cover.active) continue;
+        resolveCircleVsAabb(entity.position, entity.radius, cover.aabb);
+      }
+    }
+    for (let i = 0; i < world.entities.length; i += 1) {
+      const a = world.entities[i];
+      if (a.eliminated) continue;
+      for (let j = i + 1; j < world.entities.length; j += 1) {
+        const b = world.entities[j];
+        if (b.eliminated) continue;
+        resolveCircleVsCircle(a.position, a.radius, b.position, b.radius);
+      }
     }
 
     updatePickups(world.pickups, world.entities, fixedDt, world.timeSeconds);
@@ -258,12 +244,20 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
       const weaponCfg = WEAPON_CONFIGS[p.weaponId];
 
       if (h) {
-        const attacker = world.entities.find((e) => e.id === p.attackerId) ?? player;
+        const attacker = world.entities.find((e) => e.id === p.attackerId) ?? human;
         const dir = p.velocity.clone();
         if (dir.lengthSq() > 1e-6) dir.normalize();
 
         if (h.type === 'entity') {
           applyWeaponHitToEntity(attacker, p.weaponId, h.entity, dir, { damageAmount: p.damageAmount });
+        }
+        if (h.type === 'cover') {
+          const ignite = weaponCfg.onHitEffects?.some((eff) => eff.kind === 'status' && eff.id === 'burn') ?? false;
+          applyDamageToCover(scene, world.entities, h.cover, p.damageAmount, {
+            ignite,
+            attackerId: p.attackerId,
+            attackerTeam: p.attackerTeam
+          });
         }
 
         const impactPoint = h.type === 'entity' || h.type === 'cover' ? h.point : p.position;
@@ -322,7 +316,10 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
     }
     world.projectiles = remaining;
 
-    cameraRig.setTargetPosition(player.position);
+    applyRespawns(world, match, fixedDt);
+    updateMatch(world, match, fixedDt);
+
+    cameraRig.setTargetPosition(human.position);
     cameraRig.update(fixedDt);
   };
 
@@ -349,4 +346,23 @@ export function createSanguoShooterApp(canvas: HTMLCanvasElement): SanguoShooter
   };
 
   return { renderer, scene, camera, input, assets, audio, beginFrame, step, frame, dispose };
+}
+
+function resolveInitialMatchFromUrl(): { modeId: ModeId; sceneId: SceneId } {
+  const params = new URLSearchParams(window.location.search);
+  const modeRaw = params.get('mode');
+  const sceneRaw = params.get('scene');
+  const modeId = isModeId(modeRaw) ? modeRaw : 'duel';
+  const sceneId = isSceneId(sceneRaw) ? sceneRaw : 'trainingGround';
+  return { modeId, sceneId };
+}
+
+function isModeId(value: string | null): value is ModeId {
+  if (!value) return false;
+  return (MODE_IDS as readonly string[]).includes(value);
+}
+
+function isSceneId(value: string | null): value is SceneId {
+  if (!value) return false;
+  return (SCENE_IDS as readonly string[]).includes(value);
 }

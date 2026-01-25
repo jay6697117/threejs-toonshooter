@@ -7,7 +7,7 @@ export type ActiveStatus = {
   timeLeft: number;
 };
 
-export type TeamId = 'p1' | 'p2' | 'p3' | 'p4';
+export type TeamId = 'p1' | 'p2' | 'p3' | 'p4' | 'red' | 'blue';
 
 export type EntityId = string;
 
@@ -20,9 +20,19 @@ export type Entity = {
   velocity: THREE.Vector3;
   yaw: number;
 
+  damageDealtMultiplier: number;
+  isInDark: boolean;
+  isInWater: boolean;
+
   hp: number;
   maxHp: number;
   eliminated: boolean;
+  respawnTimer: number;
+  livesLeft: number;
+  kills: number;
+  deaths: number;
+  score: number;
+  carryingFlag: 'red' | 'blue' | null;
 
   radius: number;
   hurtRadius: number;

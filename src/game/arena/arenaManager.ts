@@ -4,7 +4,6 @@ import { ARENA_SCENES, type ArenaSceneDef, type ArenaZone } from './sceneDefinit
 import { createBoxCover, type Cover } from './cover';
 import { createHealthPickup, createThrowablePickup, createWeaponPickup, type Pickup } from './pickups';
 import type { World } from '../core/world';
-import { applyExplosion } from '../combat/areaDamage';
 import { applyStatus } from '../combat/statusEffects';
 import { dealDamage } from '../combat/damage';
 
@@ -70,7 +69,11 @@ export function loadArena(scene: THREE.Scene, world: World, modeId: ModeId, scen
     modeId,
     bounds,
     zones: def.zones ?? [],
-    objectives: def.objectives
+    objectives: def.objectives,
+    ffaSpawns: def.ffaSpawns.map((p) => scalePositionXZ(p, def.bounds, arenaScale)),
+    redSpawns: def.redSpawns.map((p) => scalePositionXZ(p, def.bounds, arenaScale)),
+    blueSpawns: def.blueSpawns.map((p) => scalePositionXZ(p, def.bounds, arenaScale)),
+    runtimeObjects: objects
   };
 
   return { def, modeId, ground, objects };
@@ -84,6 +87,10 @@ export function updateArena(world: World, dt: number): void {
 }
 
 export function clearArena(scene: THREE.Scene, world: World): void {
+  for (const obj of world.arena?.runtimeObjects ?? []) {
+    scene.remove(obj);
+  }
+
   for (const cover of world.covers) {
     scene.remove(cover.mesh);
   }
@@ -113,6 +120,7 @@ export function clearArena(scene: THREE.Scene, world: World): void {
   world.smokes.length = 0;
   world.areas.length = 0;
   world.traps.length = 0;
+  world.arena = undefined;
 }
 
 function scaleBounds(bounds: { minX: number; maxX: number; minZ: number; maxZ: number }, scale: number): { minX: number; maxX: number; minZ: number; maxZ: number } {
@@ -122,6 +130,13 @@ function scaleBounds(bounds: { minX: number; maxX: number; minZ: number; maxZ: n
   const hx = ((bounds.maxX - bounds.minX) / 2) * scale;
   const hz = ((bounds.maxZ - bounds.minZ) / 2) * scale;
   return { minX: cx - hx, maxX: cx + hx, minZ: cz - hz, maxZ: cz + hz };
+}
+
+function scalePositionXZ(pos: THREE.Vector3, bounds: { minX: number; maxX: number; minZ: number; maxZ: number }, scale: number): THREE.Vector3 {
+  if (scale === 1) return pos.clone();
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cz = (bounds.minZ + bounds.maxZ) / 2;
+  return new THREE.Vector3(cx + (pos.x - cx) * scale, pos.y, cz + (pos.z - cz) * scale);
 }
 
 function createGround(bounds: { minX: number; maxX: number; minZ: number; maxZ: number }, color: number): THREE.Mesh {
@@ -192,30 +207,3 @@ function updateBurningCovers(world: World, dt: number): void {
     }
   }
 }
-
-export function applyDamageToCover(scene: THREE.Scene, world: World, cover: Cover, amount: number, options?: { ignite?: boolean; attackerId?: string; attackerTeam?: string }): void {
-  if (!cover.active) return;
-  if (!cover.destructible) return;
-  if (amount <= 0) return;
-
-  cover.hp = Math.max(0, cover.hp - amount);
-  if (options?.ignite && cover.burnable) {
-    const burnSeconds = cover.burnSeconds ?? 6;
-    cover.burnTimeLeftSeconds = Math.max(cover.burnTimeLeftSeconds ?? 0, burnSeconds);
-  }
-
-  if (cover.hp > 0) return;
-
-  cover.active = false;
-  scene.remove(cover.mesh);
-
-  if (cover.onDestroyedExplosion) {
-    applyExplosion(world.entities, cover.mesh.position, cover.onDestroyedExplosion.radiusMeters, cover.onDestroyedExplosion.damage, {
-      attackerId: options?.attackerId,
-      attackerTeam: options?.attackerTeam as any,
-      knockbackDistance: cover.onDestroyedExplosion.knockbackDistance,
-      statusEffects: cover.onDestroyedExplosion.statusEffects
-    });
-  }
-}
-
