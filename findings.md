@@ -1,21 +1,34 @@
-# Findings
+# 调研记录
 
-## Repo Snapshot (Pre-Vite)
-- Static hosting layout: everything under `public/` is deployable.
-- Legacy playable prototype lives at `public/toonshooter/index.html` (single-file Three.js app, importmap CDN).
-- Asset manifest: `public/assets.json` provides paths under `assets/toonshooter/**`.
-- Vercel config: `vercel.json` currently targets `outputDirectory: public` with long-cache headers for `/assets/**`.
+## 仓库现状（引入 Vite 前）
+- 静态托管结构：`public/` 下的内容可直接部署。
+- legacy 可玩原型：`public/toonshooter/index.html`（单文件 Three.js app，importmap + CDN）。
+- 资产清单：`public/assets.json` 提供 `assets/toonshooter/**` 路径。
+- Vercel 配置：`vercel.json` 原本指向 `outputDirectory: public`，并对 `/assets/**` 下发长缓存。
 
-## Key Constraints Applied
-- Use Vite + TypeScript from day 1 (strict mode).
-- Keep legacy prototype accessible (no refactor/rewrites of `public/toonshooter/`).
-- Placeholder-first is allowed for new Sanguo content (logic complete, assets can be swapped later).
-- For team modes, assume `1 human + AI fill` by default.
+## 已确认并执行的关键约束
+- 从 Day 1 使用 `Vite + TypeScript`（`strict`）。
+- 保持 legacy 原型可访问（不重构/不重写 `public/toonshooter/`）。
+- 允许 placeholder-first：先保证玩法逻辑完整，再逐步替换最终 glTF 资产。
+- 组队模式默认输入假设：`1 human + AI fill`。
 
-## Immediate Implications
-- `public/index.html` conflicts with Vite’s root `index.html` convention; must be moved or renamed.
-- Multi-page build is required to host:
-  - Landing page at `/`
-  - New game at `/sanguo-shooter/`
-  - Legacy prototype at `/toonshooter/` (static, copied from `public/`)
-- Action checklist is documented at `docs/plans/2026-01-25-sanguo-shooter-implementation-plan.md`.
+## 工程层面的直接影响
+- `public/index.html` 会与 Vite 的根 `index.html` 约定冲突：需要移动或重命名。
+- 需要 multi-page build 同时承载：
+  - landing：`/`
+  - 新游戏：`/sanguo-shooter/`
+  - legacy 原型：`/toonshooter/`（静态复制自 `public/`）
+- 可执行行动清单：`docs/plans/2026-01-25-sanguo-shooter-implementation-plan.md`。
+
+## 清单验收（2026-01-25）
+- Phase 0：已完成（Vite + TS、多入口、保留 legacy、build+preview 路由 OK）。
+- Phase 1-4：已完成 first playable pass（core runtime、world/entities、combat 基础、15 武器第一版）。
+- Phase 5+：仍待推进（throwables、arenas、modes、AI、UI、FX、资产替换、测试与性能阶段）。
+- 配置基线已固化并在启动时校验：
+  - IDs: `src/game/config/ids.ts`
+  - Weapons: `src/game/config/weapons.ts`
+  - Throwables: `src/game/config/throwables.ts`
+  - Scenes: `src/game/config/scenes.ts`
+  - Modes: `src/game/config/modes.ts`
+  - Status effects: `src/game/config/statusEffects.ts`
+  - Validation: `src/game/config/validate.ts`

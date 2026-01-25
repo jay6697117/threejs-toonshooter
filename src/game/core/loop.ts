@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 export type FixedLoopCallbacks = {
+  onBeginFrame?: (frameDt: number) => void;
   onStep: (fixedDt: number) => void;
   onFrame: (alpha: number) => void;
 };
@@ -18,6 +19,7 @@ export function startFixedLoop(options: FixedLoopOptions, callbacks: FixedLoopCa
 
   const frame = (): void => {
     const frameDt = Math.min(options.clock.getDelta(), maxFrameDt);
+    callbacks.onBeginFrame?.(frameDt);
     accumulator += frameDt;
 
     while (accumulator >= options.fixedDt) {
@@ -33,4 +35,3 @@ export function startFixedLoop(options: FixedLoopOptions, callbacks: FixedLoopCa
   rafId = window.requestAnimationFrame(frame);
   return () => window.cancelAnimationFrame(rafId);
 }
-

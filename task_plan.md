@@ -26,6 +26,47 @@
 - [x] 固化“数据驱动”基础：ID 类型 + 配置 Schema + 运行时校验入口
 - [x] 最小可运行：新入口能在浏览器打开、渲染 Three.js 场景、响应 resize、主循环稳定运行
 
+## 当前阶段（Phase 1）
+核心运行时（渲染/相机/输入/循环/资源/存档/音频）落地为可扩展模块。
+
+### Phase 1 - Checklist
+- [x] `core/renderer.ts`：DPR 限制、色彩空间、阴影、Resize、性能开关（可配置）
+- [x] `core/camera.ts`：俯视跟随骨架、screen shake、FOV pulse 接口
+- [x] `core/input.ts`：键位映射 + justPressed/justReleased
+- [x] `core/loop.ts`：fixed timestep + render interpolation（已支持 `onBeginFrame` 钩子）
+- [x] `core/assets.ts`：manifest 加载 + GLTF cache/clone + placeholder mesh
+- [x] `core/storage.ts`：设置版本化 + defaults + clamp
+- [x] `core/audio.ts`：WebAudio unlock + buses + placeholder beep
+
+## 当前阶段（Phase 2）
+世界与实体（移动/碰撞/拾取/基础交互）落地为“可玩”的基础。
+
+### Phase 2 - Checklist
+- [x] `core/world.ts`：世界容器 + 统一 update 顺序（entities/cover/projectiles/throwables/fx）
+- [x] `entities/entityBase.ts`：实体基类字段（对齐拆解文档核心字段）
+- [x] `entities/player.ts`：移动 + dash（按设计数值：`6m/s`、`12m/s`、`0.3s`、`3s`）
+- [x] `combat/collision.ts`：bounds + Circle-vs-AABB + Circle-vs-Circle
+- [x] `arena/pickups.ts`：拾取/掉落/空投（含 2-slot 副武器限制）
+- [x] `arena/interactables.ts`：可燃烧/可破坏/可推动/可攀爬/可开关 的组件化框架
+
+## 当前阶段（Phase 3）
+战斗底座（射线/弹体/爆炸/伤害/状态效果）落地为可复用的结算链路。
+
+### Phase 3 - Checklist
+- [x] `combat/raycast.ts`：实体 Sphere 命中 + 掩体 Box 命中 + multi-hit（穿透）
+- [x] `weapons/projectile.ts`：弹体更新（linear/ballistic/bouncy/returning/grapple）+ 事件回传 + 移除策略
+- [x] `combat/areaDamage.ts`：AOE 衰减伤害 + 击退
+- [x] `combat/damage.ts`：伤害结算（含 bleed 伤害放大）
+- [x] `combat/statusEffects.ts`：状态应用/刷新/不叠加 + DOT tick + 派生属性
+
+## 当前阶段（Phase 4）
+主武器系统（15）落地为“first playable pass”：弹药/换弹/蓄力/特殊机制先完整，数值与美术后续迭代。
+
+### Phase 4 - Checklist
+- [x] `weapons/weaponState.ts`：weapon slot runtime（ammo/reserve/reload/cooldown/charge）
+- [x] `weapons/weaponManager.ts`：switch/reload/charge/burstAll（输入边沿不丢帧）
+- [x] `weapons/fireWeapon.ts`：pellets/doubleShot/penetrate/charge damage snapshot
+
 ## 后续阶段（Phase 1+，仅做路线图）
 > 说明：每个阶段的“完成条件”必须可验证（可运行/可复现/可回归），避免只写代码不形成可用增量。
 

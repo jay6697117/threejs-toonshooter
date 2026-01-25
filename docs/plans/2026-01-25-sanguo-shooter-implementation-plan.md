@@ -188,18 +188,18 @@
 **目标：** 新入口能跑（哪怕全是 placeholder），并且 legacy 原型仍可访问。
 
 **Checklist：**
-- [ ] 新增/完善工程文件：`package.json`、`tsconfig.json`、`vite.config.ts`
-- [ ] 处理 landing page：把 `public/index.html` 的内容迁移为根 `index.html`（Vite 入口）
-- [ ] 新增第二入口：`sanguo-shooter/index.html`（Vite multi-page input）
-- [ ] 新增 TS 入口：
-  - [ ] `src/landing/main.ts`
-  - [ ] `src/game/main.ts`
-- [ ] 保留 legacy：
-  - [ ] `public/toonshooter/` 不改动
-  - [ ] landing 保留 `/toonshooter/` 链接
-- [ ] 更新静态部署配置：
-  - [ ] `vercel.json` output 指向 `dist`
-  - [ ] 确保 `/assets/**` 长缓存仍生效（Vite 会复制 `public/assets/**` 到 `dist/assets/**`）
+- [x] 新增/完善工程文件：`package.json`、`tsconfig.json`、`vite.config.ts`
+- [x] 处理 landing page：把 `public/index.html` 的内容迁移为根 `index.html`（Vite 入口）
+- [x] 新增第二入口：`sanguo-shooter/index.html`（Vite multi-page input）
+- [x] 新增 TS 入口：
+  - [x] `src/landing/main.ts`
+  - [x] `src/game/main.ts`
+- [x] 保留 legacy：
+  - [x] `public/toonshooter/` 不改动
+  - [x] landing 保留 `/toonshooter/` 链接
+- [x] 更新静态部署配置：
+  - [x] `vercel.json` output 指向 `dist`
+  - [x] 确保 `/assets/**` 长缓存仍生效（Vite 会复制 `public/assets/**` 到 `dist/assets/**`）
 
 **Done Criteria（必须同时满足）：**
 - `npm run dev` 下：
@@ -223,13 +223,13 @@ npm run preview
 **目标：** 形成稳定“游戏内核”，后续任何玩法只是在其上添加系统，而不是反复改内核。
 
 **Checklist：**
-- [ ] `core/renderer.ts`：DPR 限制、色彩空间、shadow、resize、quality presets
-- [ ] `core/camera.ts`：俯视跟随、screen shake、FOV pulse、timeScale hooks
-- [ ] `core/input.ts`：键位表 + justPressed/pressed/justReleased
-- [ ] `core/loop.ts`：fixed timestep + render interpolation
-- [ ] `core/assets.ts`：`assets.json` 加载、GLTF cache、clone（SkeletonUtils）
-- [ ] `core/storage.ts`：settings schema + migration + defaults
-- [ ] `core/audio.ts`：unlock + buses + volume settings（资源后补）
+- [x] `core/renderer.ts`：DPR 限制、色彩空间、shadow、resize、quality presets
+- [x] `core/camera.ts`：俯视跟随、screen shake、FOV pulse、timeScale hooks
+- [x] `core/input.ts`：键位表 + justPressed/pressed/justReleased
+- [x] `core/loop.ts`：fixed timestep + render interpolation
+- [x] `core/assets.ts`：`assets.json` 加载、GLTF cache、clone（SkeletonUtils）
+- [x] `core/storage.ts`：settings schema + migration + defaults
+- [x] `core/audio.ts`：unlock + buses + volume settings（资源后补）
 
 **Done Criteria：**
 - 主循环稳定、不会随帧率改变运动速度（fixedDt）。
@@ -243,11 +243,11 @@ npm run preview
 **目标：** 玩家、AI（先 dummy）可在场地内移动、碰撞、拾取。
 
 **Checklist：**
-- [ ] `core/world.ts`：集中存放实体数组与系统集合
-- [ ] `entities/entityBase.ts`：统一字段（hp, velocity, yaw, cooldowns, statuses, inventory）
-- [ ] `entities/player.ts`：WASD 移动、dash（按设计数值）、受控态门禁
-- [ ] `combat/collision.ts`：bounds + circle/aabb + circle/circle
-- [ ] `arena/pickups.ts`：武器/副武器拾取、2-slot 限制
+- [x] `core/world.ts`：集中存放实体数组与系统集合
+- [x] `entities/entityBase.ts`：统一字段（hp, velocity, yaw, cooldowns, statuses, inventory）
+- [x] `entities/player.ts`：WASD 移动、dash（按设计数值）、受控态门禁
+- [x] `combat/collision.ts`：bounds + circle/aabb + circle/circle
+- [x] `arena/pickups.ts`：武器/副武器拾取、2-slot 限制
 
 **Done Criteria：**
 - 玩家不会穿墙/穿掩体；边界约束正确。
@@ -261,11 +261,15 @@ npm run preview
 **目标：** 战斗结算链路完整（无论武器是否全实现）。
 
 **Checklist：**
-- [ ] `combat/raycast.ts`：hitscan + multi-hit（穿透）
-- [ ] `weapons/projectile.ts`：直线/抛物线/返回/弹跳 支持，且对象池化
-- [ ] `combat/areaDamage.ts`：AOE + falloff + friendly-fire multiplier（可配）
-- [ ] `combat/damage.ts`：伤害结算 + difficulty tuning
-- [ ] `combat/statusEffects.ts`：Core 8 + `root/knockdown`
+- [x] `combat/raycast.ts`：hitscan（first hit）
+- [x] `combat/raycast.ts`：multi-hit（用于 `heavyCrossbow` 穿透）
+- [x] `weapons/projectile.ts`：直线/抛物线/弹跳（基础）
+- [x] `weapons/projectile.ts`：返回（用于 `boomerangBlade`）
+- [x] `weapons/projectile.ts`：grapple（用于 `grapplingHook`）
+- [ ] `weapons/projectile.ts`：对象池化（后续性能阶段）
+- [x] `combat/areaDamage.ts`：AOE + falloff + friendly-fire multiplier（可配）
+- [x] `combat/damage.ts`：伤害结算 + difficulty tuning
+- [x] `combat/statusEffects.ts`：Core 8 + `root/knockdown`
 
 **Done Criteria：**
 - 任何命中路径（hitscan/projectile/aoe）都能统一触发：伤害 → 状态 → 击退 → VFX/SFX hooks。
@@ -278,13 +282,15 @@ npm run preview
 **目标：** 15 把武器全部可用，机制完整；资产可先 placeholder。
 
 **Checklist（强制按类别逐把验收）：**
-- [ ] `weapons/weaponManager.ts`：weapon slots + switching + reload + charge states
-- [ ] `weapons/config.ts`：15 weapons config（严格按 `weaponId`）
+- [x] `weapons/weaponManager.ts`：weapon slots + switching + reload + charge states
+- [x] `config/weapons.ts`：15 weapons config（严格按 `weaponId`）
 - [ ] 逐把实现（每把都要有 smoke 用例）：
-  - [ ] melee: `flyingKnife` `flyingDart` `sleeveArrow` `boomerangBlade`
-  - [ ] mid: `huntingBow` `repeatingCrossbow` `fireArrow` `ironMace`
-  - [ ] ranged: `strongBow` `heavyCrossbow` `siegeCrossbow` `poisonCrossbow`
-  - [ ] special: `zhugeRepeater` `grapplingHook` `thunderBomb`
+  - [x] melee（first playable pass）: `flyingKnife` `flyingDart` `sleeveArrow` `boomerangBlade`
+  - [x] mid（first playable pass）: `huntingBow` `repeatingCrossbow` `fireArrow` `ironMace`
+  - [x] ranged（first playable pass）: `strongBow` `heavyCrossbow` `siegeCrossbow` `poisonCrossbow`
+  - [x] special（first playable pass）: `zhugeRepeater` `grapplingHook` `thunderBomb`
+  - [ ] per-weapon smoke checklist（ammo/reload/charge/special + edge cases）
+  - [ ] special acquisition gating（airdrop/treasure only）
 
 **Done Criteria：**
 - 15 把武器“数值、弹药、换弹、蓄力、状态效果、特殊机制”都可跑通。
@@ -297,14 +303,14 @@ npm run preview
 **目标：** 9 个副武器全部可用；携带 2 格；放置/投掷预览可用。
 
 **Checklist：**
-- [ ] `throwables/throwableManager.ts`：2-slot inventory + preview + throw/place
-- [ ] 9 items implementation：
-  - [ ] explosive: `thunderGrenade` `gunpowderPack` `smokeBomb`
-  - [ ] traps: `tripWire` `caltrops` `bearTrap`
-  - [ ] utility: `limePowder` `oilPot` `poisonSmoke`
+- [x] `throwables/throwableManager.ts`：2-slot inventory + preview + throw/place
+- [x] 9 items implementation（first playable pass）：
+  - [x] explosive（first playable pass）: `thunderGrenade` `gunpowderPack` `smokeBomb`
+  - [x] traps（first playable pass）: `tripWire` `caltrops` `bearTrap`
+  - [x] utility（first playable pass）: `limePowder` `oilPot` `poisonSmoke`
 - [ ] 规则联动：
   - [ ] smoke/poison smoke 影响 LoS/AI 感知（先对 AI 命中率做降级也可）
-  - [ ] oil ignitable（被 burn source 点燃后转为 burn area）
+  - [x] oil ignitable（placeholder：燃烧单位接触油区则点燃）
 
 ---
 
@@ -397,4 +403,3 @@ npm run preview
 - 设计规格：`docs/plans/2026-01-25-sanguo-shooter-design.md`
 - 参考原型拆解：`docs/ANALYSIS.md`
 - Agent 执行跟踪（工作内存）：`task_plan.md` / `findings.md` / `progress.md`
-

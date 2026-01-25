@@ -1,11 +1,16 @@
 import * as THREE from 'three';
 
-export function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
+export type RendererOptions = {
+  maxDpr?: number;
+  shadows?: boolean;
+};
+
+export function createRenderer(canvas: HTMLCanvasElement, options?: RendererOptions): THREE.WebGLRenderer {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const maxDpr = options?.maxDpr ?? 2;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = options?.shadows ?? true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   return renderer;
 }
-
