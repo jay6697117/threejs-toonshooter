@@ -24,7 +24,7 @@
 - [x] 保留 legacy：`public/toonshooter/` 继续作为静态可访问的旧原型（不参与 Vite 构建）
 - [x] 建立 `src/game/**` 模块骨架：core/entities/weapons/throwables/arena/combat/fx/ui/modes
 - [x] 固化“数据驱动”基础：ID 类型 + 配置 Schema + 运行时校验入口
-- [ ] 最小可运行：新入口能在浏览器打开、渲染 Three.js 场景、响应 resize、主循环稳定运行
+- [x] 最小可运行：新入口能在浏览器打开、渲染 Three.js 场景、响应 resize、主循环稳定运行
 
 ## 后续阶段（Phase 1+，仅做路线图）
 > 说明：每个阶段的“完成条件”必须可验证（可运行/可复现/可回归），避免只写代码不形成可用增量。
