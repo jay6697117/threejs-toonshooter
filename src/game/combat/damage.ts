@@ -16,6 +16,12 @@ export function dealDamage(target: Entity, baseAmount: number, source?: DamageSo
   const derived = computeStatusDerived(target);
   const amount = baseAmount * derived.damageTakenMultiplier;
 
+  if (source?.attackerId) {
+    target.lastAttackerId = source.attackerId;
+    target.lastAttackerTeam = source.attackerTeam ?? null;
+    target.lastWeaponId = source.weaponId ?? null;
+  }
+
   target.hp = Math.max(0, target.hp - amount);
   if (target.hp === 0) {
     target.eliminated = true;
@@ -25,4 +31,3 @@ export function dealDamage(target: Entity, baseAmount: number, source?: DamageSo
   void source;
   return amount;
 }
-

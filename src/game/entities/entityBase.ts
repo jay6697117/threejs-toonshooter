@@ -27,12 +27,17 @@ export type Entity = {
   hp: number;
   maxHp: number;
   eliminated: boolean;
+  deathProcessed: boolean;
   respawnTimer: number;
   livesLeft: number;
   kills: number;
   deaths: number;
   score: number;
   carryingFlag: 'red' | 'blue' | null;
+
+  lastAttackerId: string | null;
+  lastAttackerTeam: TeamId | null;
+  lastWeaponId: WeaponId | null;
 
   radius: number;
   hurtRadius: number;
