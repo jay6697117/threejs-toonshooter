@@ -1292,7 +1292,7 @@
     }
 
     async function loadAssets() {
-      const response = await fetch('../assets.json');
+      const response = await fetch('./assets.json');
       assets.manifest = await response.json();
 
       const manifest = assets.manifest.assets.toonshooter;
